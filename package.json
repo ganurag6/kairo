@@ -1,6 +1,6 @@
 {
   "name": "kairo",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "AI assistant that acts at the perfect moment - Smarter tasks, simpler life",
   "main": "main.js",
   "scripts": {
@@ -49,11 +49,7 @@
       "!.gitignore"
     ],
     "mac": {
-      "category": "public.app-category.productivity",
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
+      "category": "public.app-category.productivity"
     },
     "win": {
       "target": "nsis"
