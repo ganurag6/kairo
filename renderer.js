@@ -445,6 +445,8 @@ class KairoApp {
       
       const apiKey = await window.electronAPI.getApiKey();
       console.log('🔑 API key exists:', !!apiKey);
+      console.log('🔑 API key length:', apiKey?.length);
+      console.log('🔑 API key preview:', apiKey?.substring(0, 10) + '...' + apiKey?.substring(apiKey.length - 10));
       
       if (!apiKey) {
         throw new Error('OpenAI API key not found. Please add OPENAI_API_KEY to your .env file.');
