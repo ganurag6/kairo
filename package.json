@@ -1,6 +1,6 @@
 {
   "name": "kairo",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "description": "AI assistant that acts at the perfect moment - Smarter tasks, simpler life",
   "main": "main.js",
   "scripts": {
@@ -48,18 +48,16 @@
       "!.vscode",
       "!.gitignore"
     ],
+    "extraResources": [],
     "mac": {
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "target": "dir"
     },
     "win": {
-      "target": "nsis"
+      "target": "dir"
     },
     "linux": {
-      "target": "AppImage"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "target": "dir"
     }
   }
 }
