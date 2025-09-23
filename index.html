@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kairo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo-container">
+        <img src="kairo-logo.svg" alt="Kairo" class="app-logo" />
+      </div>
+      <div class="header-actions">
+        <button id="minimize-btn" class="minimize-btn">−</button>
+        <button id="close-btn" class="close-btn">✕</button>
+      </div>
+    </div>
+    
+    <div class="selected-text-section">
+      <div class="text-input-wrapper">
+        <textarea id="selected-text-display" class="selected-text-box" placeholder="Select text and press Cmd+L, or type/paste here..."></textarea>
+        <button id="analyze-btn" class="analyze-btn" title="Analyze text">
+          <span class="analyze-icon">→</span>
+        </button>
+      </div>
+    </div>
+    
+    <div class="smart-suggestions" id="smart-suggestions">
+      <div class="default-actions">
+        <h3>🔧 Quick Actions</h3>
+        <div id="default-suggestions" class="suggestions-container">
+          <!-- Default suggestions will be added here -->
+        </div>
+      </div>
+      
+      <div class="ai-actions">
+        <h3>🎯 AI Suggestions</h3>
+        <div id="ai-suggestions" class="suggestions-container">
+          <!-- AI suggestions will be added here -->
+        </div>
+      </div>
+    </div>
+    
+    <div class="chat-container">
+      <div id="chat-messages" class="chat-messages">
+        <div class="welcome-message">
+          <h3>👋 Welcome to Kairo!</h3>
+          <p>Select any text and press <kbd>Cmd+L</kbd> to start.</p>
+          <p style="margin-top: 12px; font-size: 13px; color: #60a5fa;">Smarter tasks, simpler life.</p>
+        </div>
+      </div>
+    </div>
+    
+    <div class="chat-input-container">
+      <div class="input-wrapper">
+        <input 
+          type="text" 
+          id="chat-input" 
+          class="chat-input" 
+          placeholder="Ask a follow-up question or type a custom instruction..."
+          disabled
+        />
+        <button id="send-btn" class="send-btn" disabled>
+          <span class="send-icon">➤</span>
+        </button>
+      </div>
+    </div>
+    
+    <div id="loading" class="loading hidden">
+      <div class="spinner"></div>
+      <span>🤖 AI is thinking...</span>
+    </div>
+  </div>
+  
+  <script src="textDetector.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

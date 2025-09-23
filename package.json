@@ -1,0 +1,72 @@
+{
+  "name": "kairo",
+  "version": "0.9.0",
+  "description": "AI assistant that acts at the perfect moment - Smarter tasks, simpler life",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "dist": "electron-builder --publish=never",
+    "dist-mac": "electron-builder --mac",
+    "dist-win": "electron-builder --win",
+    "dist-linux": "electron-builder --linux"
+  },
+  "keywords": [
+    "electron",
+    "ai",
+    "text",
+    "writing",
+    "productivity",
+    "assistant"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "homepage": "https://kairo.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/kairo"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.6.4"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "openai": "^4.24.1"
+  },
+  "build": {
+    "appId": "com.yourcompany.kairo",
+    "productName": "Kairo",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!**/*.ts",
+      "!*.code-workspace",
+      "!.vscode",
+      "!.gitignore"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
