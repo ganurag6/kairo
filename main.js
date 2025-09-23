@@ -1,6 +1,5 @@
 const { app, BrowserWindow, globalShortcut, clipboard, Tray, Menu, ipcMain, nativeImage } = require('electron');
 const path = require('path');
-require('dotenv').config();
 
 let tray = null;
 let overlayWindow = null;
@@ -196,7 +195,7 @@ ipcMain.handle('minimize-window', () => {
 });
 
 ipcMain.handle('get-api-key', () => {
-  return process.env.OPENAI_API_KEY || '';
+  return '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';
 });
 
 ipcMain.handle('copy-to-clipboard', (event, text) => {
