@@ -1,6 +1,6 @@
 {
   "name": "kairo",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "description": "AI assistant that acts at the perfect moment - Smarter tasks, simpler life",
   "main": "main.js",
   "scripts": {
@@ -60,7 +60,8 @@
     },
     "linux": {
       "target": "AppImage",
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "category": "Utility"
     },
     "nsis": {
       "oneClick": false,
