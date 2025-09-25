@@ -13,6 +13,7 @@
         <img src="kairo-logo.svg" alt="Kairo" class="app-logo" />
       </div>
       <div class="header-actions">
+        <button id="clear-btn" class="clear-btn" title="Clear chat">🗑</button>
         <button id="minimize-btn" class="minimize-btn">−</button>
         <button id="close-btn" class="close-btn">✕</button>
       </div>
@@ -20,7 +21,7 @@
     
     <div class="selected-text-section">
       <div class="text-input-wrapper">
-        <textarea id="selected-text-display" class="selected-text-box" placeholder="Select text and press Cmd+L, or type/paste here..."></textarea>
+        <textarea id="selected-text-display" class="selected-text-box" placeholder="Select text and press Cmd+K, or type/paste here..."></textarea>
         <button id="analyze-btn" class="analyze-btn" title="Analyze text">
           <span class="analyze-icon">→</span>
         </button>
@@ -35,7 +36,7 @@
         </div>
       </div>
       
-      <div class="ai-actions">
+      <div class="ai-actions" id="ai-actions" style="display: none;">
         <h3>🎯 AI Suggestions</h3>
         <div id="ai-suggestions" class="suggestions-container">
           <!-- AI suggestions will be added here -->
@@ -47,7 +48,7 @@
       <div id="chat-messages" class="chat-messages">
         <div class="welcome-message">
           <h3>👋 Welcome to Kairo!</h3>
-          <p>Select any text and press <kbd>Cmd+L</kbd> to start.</p>
+          <p>Select any text and press <kbd>Cmd+K</kbd> to start.</p>
           <p style="margin-top: 12px; font-size: 13px; color: #60a5fa;">Smarter tasks, simpler life.</p>
         </div>
       </div>

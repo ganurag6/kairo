@@ -40,7 +40,7 @@ class KairoApp {
       setTimeout(() => {
         if (this.chatMessages) {
           console.log('🧪 Adding test message...');
-          this.addMessage('system', 'Kairo is ready! Select text and press Cmd+L to start.');
+          this.addMessage('system', 'Kairo is ready! Select text and press Cmd+K to start.');
         } else {
           console.error('❌ chatMessages element not found after initialization');
         }
@@ -57,6 +57,7 @@ class KairoApp {
     // Header elements
     this.closeBtn = document.getElementById('close-btn');
     this.minimizeBtn = document.getElementById('minimize-btn');
+    this.clearBtn = document.getElementById('clear-btn');
     
     // Selected text elements
     this.selectedTextDisplay = document.getElementById('selected-text-display');
@@ -114,6 +115,13 @@ class KairoApp {
       console.error('❌ minimizeBtn not found!');
     }
     
+    if (this.clearBtn) {
+      this.clearBtn.addEventListener('click', () => this.clearChat());
+      console.log('✅ Clear button listener added');
+    } else {
+      console.error('❌ clearBtn not found!');
+    }
+    
     
     // Chat input - with null checks
     if (this.chatInput) {
@@ -159,33 +167,37 @@ class KairoApp {
     
     // Listen for manual text input in textarea
     if (this.selectedTextDisplay) {
+      // Input event listener - only enable/disable analyze button
       this.selectedTextDisplay.addEventListener('input', () => {
         console.log('📝 Manual text input detected');
         const text = this.selectedTextDisplay.value;
-        if (text.trim()) {
-          this.currentText = text;
-          this.generateSmartSuggestions(text);
-          
-          // Enable chat if not already enabled
-          if (this.chatInput.disabled) {
-            this.chatInput.disabled = false;
-            this.sendBtn.disabled = false;
-          }
-        }
         
-        // Enable/disable analyze button based on text
+        // Just enable/disable analyze button - no suggestions
         if (this.analyzeBtn) {
           this.analyzeBtn.disabled = !text.trim();
         }
+        
+        // Update current text for analyze button to use
+        this.currentText = text;
+        
+        // Enable chat if not already enabled
+        if (this.chatInput && this.chatInput.disabled) {
+          this.chatInput.disabled = false;
+        }
+        if (this.sendBtn && this.sendBtn.disabled) {
+          this.sendBtn.disabled = false;
+        }
       });
       
-      // Add Enter key support for textarea
+      // Add Enter key handler for sending messages
       this.selectedTextDisplay.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
-          console.log('🚀 Cmd/Ctrl+Enter pressed in textarea');
-          if (this.selectedTextDisplay.value.trim()) {
-            this.analyzeBtn.click();
+          const text = this.selectedTextDisplay.value.trim();
+          if (text) {
+            console.log('📝 Enter pressed in textarea, sending as chat message');
+            this.handleUserMessage(text);
+            this.selectedTextDisplay.value = ''; // Clear after sending
           }
         }
       });
@@ -296,6 +308,12 @@ class KairoApp {
     
     // Show suggestions section
     this.smartSuggestions.style.display = 'block';
+    
+    // Show AI Actions section
+    const aiActionsSection = document.getElementById('ai-actions');
+    if (aiActionsSection) {
+      aiActionsSection.style.display = 'block';
+    }
   }
   
   showDefaultSuggestions() {
@@ -554,8 +572,17 @@ class KairoApp {
     if (type === 'assistant') {
       messageDiv.innerHTML = `
         ${content}
-        <button class="message-copy-btn" onclick="window.kairoApp.copyMessage('${content.replace(/'/g, "\\'")}')">📋</button>
+        <button class="message-copy-btn" data-copy-text="${content.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}">📋</button>
       `;
+      
+      // Add event listener to the copy button
+      const copyBtn = messageDiv.querySelector('.message-copy-btn');
+      if (copyBtn) {
+        copyBtn.addEventListener('click', (e) => {
+          const textToCopy = e.target.getAttribute('data-copy-text');
+          this.copyMessage(e, textToCopy);
+        });
+      }
     } else if (type === 'system') {
       messageDiv.innerHTML = `<em>${content}</em>`;
       messageDiv.style.fontStyle = 'italic';
@@ -600,19 +627,57 @@ class KairoApp {
     }
   }
   
-  async copyMessage(content) {
+  async copyMessage(event, content) {
+    console.log('📋 Copy button clicked, content:', content);
     try {
-      await window.electronAPI.copyToClipboard(content);
-      // Show brief success feedback
+      // Decode HTML entities and clean content
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = content;
+      const cleanContent = tempDiv.textContent || tempDiv.innerText || '';
+      
+      console.log('📋 Cleaned content for copying:', cleanContent);
+      
+      await window.electronAPI.copyToClipboard(cleanContent);
+      console.log('✅ Content copied to clipboard successfully');
+      
+      // Show brief success feedback on button
       const btn = event.target;
       const originalText = btn.textContent;
       btn.textContent = '✅';
       setTimeout(() => {
         btn.textContent = originalText;
       }, 1000);
+      
+      // Show "Copied!" notification
+      this.showCopiedNotification();
+      
     } catch (error) {
-      console.error('Copy failed:', error);
+      console.error('❌ Copy failed:', error);
+      // Show error feedback
+      const btn = event.target;
+      const originalText = btn.textContent;
+      btn.textContent = '❌';
+      setTimeout(() => {
+        btn.textContent = originalText;
+      }, 1000);
     }
+  }
+  
+  showCopiedNotification() {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = 'copy-notification';
+    notification.textContent = 'Copied to clipboard!';
+    
+    // Add to container
+    document.body.appendChild(notification);
+    
+    // Remove after animation
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 2000);
   }
   
   scrollToBottom() {
@@ -650,7 +715,7 @@ class KairoApp {
   captureNewText() {
     // This would trigger the main process to capture new text
     // For now, we'll just show a message
-    this.addMessage('system', 'Press Cmd+L to capture new text from anywhere on your screen.');
+    this.addMessage('system', 'Press Cmd+K to capture new text from anywhere on your screen.');
   }
   
   closeWindow() {
@@ -659,6 +724,41 @@ class KairoApp {
   
   minimizeWindow() {
     window.electronAPI.minimizeWindow();
+  }
+  
+  clearChat() {
+    console.log('🗑️ Clearing chat...');
+    // Clear conversation history
+    this.conversation = [];
+    
+    // Clear chat messages display
+    if (this.chatMessages) {
+      this.chatMessages.innerHTML = '';
+    }
+    
+    // Clear current text
+    this.currentText = '';
+    if (this.selectedTextDisplay) {
+      this.selectedTextDisplay.value = '';
+    }
+    
+    // Show smart suggestions section but hide AI suggestions
+    if (this.smartSuggestions) {
+      this.smartSuggestions.style.display = 'flex';
+    }
+    
+    // Hide AI Actions section when no text
+    const aiActionsSection = document.getElementById('ai-actions');
+    if (aiActionsSection) {
+      aiActionsSection.style.display = 'none';
+    }
+    
+    // Clear AI suggestions
+    if (this.aiSuggestionsContainer) {
+      this.aiSuggestionsContainer.innerHTML = '<p class="loading">Ready to analyze text...</p>';
+    }
+    
+    console.log('✅ Chat cleared');
   }
   
   hideSuggestions() {

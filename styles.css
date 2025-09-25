@@ -88,6 +88,7 @@ body {
   border-color: #991b1b;
 }
 
+.clear-btn,
 .minimize-btn {
   background: #262626;
   border: 1px solid #404040;
@@ -103,6 +104,7 @@ body {
   transition: all 0.2s ease;
 }
 
+.clear-btn:hover,
 .minimize-btn:hover {
   background: #333333;
   color: #e5e7eb;
@@ -167,7 +169,7 @@ body {
   height: 36px;
   border-radius: 8px;
   cursor: pointer;
-  display: flex;
+  display: flex; /* Show analyze button for suggestions */
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
@@ -556,6 +558,47 @@ body {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+/* Copy notification */
+.copy-notification {
+  position: fixed;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #10b981;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  z-index: 99999;
+  animation: copyNotification 2.5s ease-out forwards;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  border: 1px solid #059669;
+}
+
+@keyframes copyNotification {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.7) translateY(-20px);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+  25% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8) translateY(10px);
   }
 }
 

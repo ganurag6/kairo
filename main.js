@@ -27,7 +27,7 @@ function createTray() {
           }
         },
         {
-          label: 'Open with Ctrl+L',
+          label: 'Open with Ctrl+K',
           enabled: false
         },
         {
@@ -41,7 +41,7 @@ function createTray() {
         }
       ]);
       
-      tray.setToolTip('Kairo - Press Ctrl+L to capture text');
+      tray.setToolTip('Kairo - Press Ctrl+K to capture text');
       tray.setContextMenu(contextMenu);
       
       // Show window on tray click
@@ -135,16 +135,13 @@ async function showOverlay() {
         console.log('📏 Text length:', selectedText.length);
         
         if (!selectedText || selectedText.trim() === '') {
-          console.log('No text selected');
-          // Still show the window with a message
+          console.log('No text selected - showing existing chat');
+          // Still show the window but don't clear the chat
           if (!overlayWindow) {
             createOverlayWindow();
           }
           
-          overlayWindow.webContents.once('dom-ready', () => {
-            overlayWindow.webContents.send('captured-text', 'No text selected. Please select some text and try again.');
-          });
-          
+          // Don't send any message - just show existing chat
           overlayWindow.center();
           overlayWindow.show();
           overlayWindow.focus();
@@ -163,7 +160,10 @@ async function showOverlay() {
         // Then send the text after a short delay
         setTimeout(() => {
           console.log('Sending text to window:', selectedText);
-          overlayWindow.webContents.send('captured-text', selectedText);
+          // Only send new text if there's actually selected text
+          if (selectedText && selectedText.trim() !== '') {
+            overlayWindow.webContents.send('captured-text', selectedText);
+          }
         }, 100);
       }, 100);
     });
@@ -188,7 +188,7 @@ async function showOverlay() {
     // Send whatever is in clipboard (or empty message)
     setTimeout(() => {
       if (!selectedText || selectedText.trim() === '') {
-        overlayWindow.webContents.send('captured-text', 'Select some text and press Ctrl+L, or paste text here.');
+        overlayWindow.webContents.send('captured-text', 'Select some text and press Ctrl+K, or paste text here.');
       } else {
         overlayWindow.webContents.send('captured-text', selectedText);
       }
@@ -218,6 +218,19 @@ app.whenReady().then(() => {
     app.dock.show();
     // Create a dock icon if needed
     app.setName('Kairo');
+    
+    // Handle dock icon click
+    app.on('activate', () => {
+      console.log('Dock icon clicked');
+      if (overlayWindow) {
+        overlayWindow.show();
+        overlayWindow.focus();
+      } else {
+        createOverlayWindow();
+        overlayWindow.show();
+        overlayWindow.focus();
+      }
+    });
   }
   
   // Try to create tray but don't fail if it doesn't work
@@ -233,7 +246,7 @@ app.whenReady().then(() => {
   if (process.platform === 'win32') {
     setTimeout(() => {
       overlayWindow.show();
-      overlayWindow.webContents.send('captured-text', 'Welcome to Kairo! Press Ctrl+L to capture text from anywhere. You can also click the system tray icon.');
+      overlayWindow.webContents.send('captured-text', 'Welcome to Kairo! Press Ctrl+K to capture text from anywhere. You can also click the system tray icon.');
       
       // Hide after 5 seconds
       setTimeout(() => {
@@ -244,25 +257,25 @@ app.whenReady().then(() => {
   
   // Make sure window is created before registering shortcuts
   setTimeout(() => {
-    const ret = globalShortcut.register('CommandOrControl+L', () => {
-      console.log('Cmd+L pressed!');
+    const ret = globalShortcut.register('CommandOrControl+K', () => {
+      console.log('Cmd/Ctrl+K pressed!');
       showOverlay();
     });
     
     if (!ret) {
       console.log('Registration failed - shortcut might be taken by another app');
     } else {
-      console.log('Shortcut registered successfully: Cmd/Ctrl+L');
+      console.log('Shortcut registered successfully: Cmd/Ctrl+K');
     }
     
     // Also register an alternative shortcut just in case
-    const altRet = globalShortcut.register('CommandOrControl+Shift+L', () => {
-      console.log('Cmd+Shift+L pressed!');
+    const altRet = globalShortcut.register('CommandOrControl+Shift+K', () => {
+      console.log('Cmd/Ctrl+Shift+K pressed!');
       showOverlay();
     });
     
     if (altRet) {
-      console.log('Alternative shortcut registered: Cmd/Ctrl+Shift+L');
+      console.log('Alternative shortcut registered: Cmd/Ctrl+Shift+K');
     }
   }, 1000);
 });

@@ -14,7 +14,7 @@ This is an internal release of Kairo for team members and early users.
 
 ### Basic Usage
 1. **Select any text** on your screen (emails, documents, web pages, etc.)
-2. **Press `Cmd+L`** (Mac) or `Ctrl+L` (Windows/Linux)
+2. **Press `Cmd+K`** (Mac) or `Ctrl+K` (Windows/Linux)
 3. **Kairo opens** with your text ready for analysis
 4. **Click the blue arrow** to get AI analysis, or use quick action buttons
 
@@ -26,7 +26,7 @@ This is an internal release of Kairo for team members and early users.
 - 📋 **Easy Copying**: Copy AI responses back to your work
 
 ### Keyboard Shortcuts
-- `Cmd+L` / `Ctrl+L`: Capture text from anywhere
+- `Cmd+K` / `Ctrl+K`: Capture text from anywhere
 - `Enter`: Analyze text you've typed/pasted
 - `Escape`: Close window
 - `-` button: Minimize window
@@ -36,19 +36,19 @@ This is an internal release of Kairo for team members and early users.
 
 ### Email Writing
 1. Select your draft email text
-2. Press `Cmd+L`
+2. Press `Cmd+K`
 3. Click "Make Professional" or "Fix Grammar"
 4. Copy the improved version back
 
 ### Document Review
 1. Select a paragraph you want to improve
-2. Press `Cmd+L`
+2. Press `Cmd+K`
 3. Ask: "Make this more concise"
 4. Get instant rewrite suggestions
 
 ### Research & Analysis
 1. Select text from articles or reports
-2. Press `Cmd+L`
+2. Press `Cmd+K`
 3. Click "Summarize" or ask "What are the key points?"
 4. Get quick insights
 

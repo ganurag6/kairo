@@ -2,11 +2,11 @@
 
 **Smarter tasks, simpler life.**
 
-Kairo is an AI assistant that acts at the perfect moment. Select any text on your screen, press Cmd+L, and get instant AI-powered assistance.
+Kairo is an AI assistant that acts at the perfect moment. Select any text on your screen, press Cmd+K, and get instant AI-powered assistance.
 
 ## Features
 
-- 🔥 **Global Text Capture**: Select text anywhere and press Cmd+L to analyze
+- 🔥 **Global Text Capture**: Select text anywhere and press Cmd+K to analyze
 - 🤖 **AI-Powered Suggestions**: Smart suggestions based on your text type
 - 💬 **Chat Interface**: Have conversations about your selected text
 - ⚡ **Quick Actions**: One-click text improvements (grammar, rewriting, summarizing)
@@ -32,7 +32,7 @@ Kairo is an AI assistant that acts at the perfect moment. Select any text on you
 
 ### Usage
 
-1. **Capture Text**: Select any text on your screen and press `Cmd+L` (Mac) or `Ctrl+L` (Windows/Linux)
+1. **Capture Text**: Select any text on your screen and press `Cmd+K` (Mac) or `Ctrl+K` (Windows/Linux)
 2. **Analyze**: Click the blue arrow button to send your text to AI for analysis
 3. **Quick Actions**: Use suggestion buttons for common tasks like grammar fixes or summarizing
 4. **Chat**: Type follow-up questions to have a conversation about your text
@@ -40,7 +40,7 @@ Kairo is an AI assistant that acts at the perfect moment. Select any text on you
 
 ## Keyboard Shortcuts
 
-- `Cmd+L` / `Ctrl+L`: Capture selected text
+- `Cmd+K` / `Ctrl+K`: Capture selected text
 - `Enter`: Analyze text in the input area
 - `Escape`: Close the application window
 
@@ -74,7 +74,7 @@ Kairo uses your OpenAI API key, so you pay OpenAI directly for usage. Typical co
 - Check that the app isn't blocked by security settings
 
 **Global shortcut not working:**
-- Try the alternative shortcut `Cmd+Shift+L`
+- Try the alternative shortcut `Cmd+Shift+K`
 - Restart the application
 - Check if another app is using the same shortcut
 
