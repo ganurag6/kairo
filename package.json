@@ -1,6 +1,6 @@
 {
   "name": "kairo",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "description": "AI assistant that acts at the perfect moment - Smarter tasks, simpler life",
   "main": "main.js",
   "scripts": {

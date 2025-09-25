@@ -6,9 +6,49 @@ let overlayWindow = null;
 
 function createTray() {
   try {
-    // Skip tray creation entirely for now
-    console.log('Skipping tray creation for now');
-    return;
+    // Create tray icon for Windows/Linux
+    if (process.platform !== 'darwin') {
+      // Use smaller icon for tray (Windows prefers 16x16 or 32x32)
+      const iconPath = path.join(__dirname, 'build', 'icon.png');
+      console.log('Creating tray with icon:', iconPath);
+      
+      // For Windows, we need to ensure icon exists and is the right size
+      const trayIcon = nativeImage.createFromPath(iconPath);
+      const resizedIcon = trayIcon.resize({ width: 32, height: 32 });
+      
+      tray = new Tray(resizedIcon);
+      console.log('Tray created successfully');
+      
+      const contextMenu = Menu.buildFromTemplate([
+        {
+          label: 'Show Kairo',
+          click: () => {
+            showOverlay();
+          }
+        },
+        {
+          label: 'Open with Ctrl+L',
+          enabled: false
+        },
+        {
+          type: 'separator'
+        },
+        {
+          label: 'Quit',
+          click: () => {
+            app.quit();
+          }
+        }
+      ]);
+      
+      tray.setToolTip('Kairo - Press Ctrl+L to capture text');
+      tray.setContextMenu(contextMenu);
+      
+      // Show window on tray click
+      tray.on('click', () => {
+        showOverlay();
+      });
+    }
   } catch (error) {
     console.error('Failed to create tray:', error);
   }
@@ -78,9 +118,9 @@ async function showOverlay() {
   // Store the frontmost app
   const { exec } = require('child_process');
   
-  // On macOS, we'll use AppleScript to copy selected text
+  // Platform-specific copy command
   if (process.platform === 'darwin') {
-    console.log('Attempting to copy selected text...');
+    console.log('Attempting to copy selected text on macOS...');
     exec('osascript -e \'tell application "System Events" to keystroke "c" using command down\'', (error) => {
       if (error) {
         console.error('❌ Copy failed:', error);
@@ -127,6 +167,46 @@ async function showOverlay() {
         }, 100);
       }, 100);
     });
+  } else if (process.platform === 'win32') {
+    console.log('Attempting to copy selected text on Windows...');
+    
+    // For Windows, we need to simulate Ctrl+C
+    // First, let's just try to show the window with current clipboard content
+    const selectedText = clipboard.readText();
+    console.log('Current clipboard text:', selectedText);
+    
+    if (!overlayWindow) {
+      createOverlayWindow();
+    }
+    
+    // Windows-specific window showing
+    overlayWindow.setAlwaysOnTop(true);
+    overlayWindow.show();
+    overlayWindow.focus();
+    overlayWindow.setAlwaysOnTop(false);
+    
+    // Send whatever is in clipboard (or empty message)
+    setTimeout(() => {
+      if (!selectedText || selectedText.trim() === '') {
+        overlayWindow.webContents.send('captured-text', 'Select some text and press Ctrl+L, or paste text here.');
+      } else {
+        overlayWindow.webContents.send('captured-text', selectedText);
+      }
+    }, 100);
+  } else {
+    // Linux or other platforms
+    const selectedText = clipboard.readText();
+    
+    if (!overlayWindow) {
+      createOverlayWindow();
+    }
+    
+    overlayWindow.show();
+    overlayWindow.focus();
+    
+    setTimeout(() => {
+      overlayWindow.webContents.send('captured-text', selectedText || 'Select some text and try again.');
+    }, 100);
   }
 }
 
@@ -148,6 +228,19 @@ app.whenReady().then(() => {
   }
   
   createOverlayWindow();
+  
+  // On Windows, show a welcome message on first launch
+  if (process.platform === 'win32') {
+    setTimeout(() => {
+      overlayWindow.show();
+      overlayWindow.webContents.send('captured-text', 'Welcome to Kairo! Press Ctrl+L to capture text from anywhere. You can also click the system tray icon.');
+      
+      // Hide after 5 seconds
+      setTimeout(() => {
+        overlayWindow.hide();
+      }, 5000);
+    }, 1500);
+  }
   
   // Make sure window is created before registering shortcuts
   setTimeout(() => {

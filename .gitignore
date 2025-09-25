@@ -1,6 +1,6 @@
 node_modules/
 .env
 dist/
-build/
+# build/  # Commented out to allow icon files
 *.log
 .DS_Store
