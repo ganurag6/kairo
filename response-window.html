@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kairo Response</title>
+  <link rel="stylesheet" href="response-window.css">
+</head>
+<body>
+  <div class="response-container">
+    <div class="response-header">
+      <div class="action-name" id="action-name">Processing...</div>
+      <button class="close-btn" id="close-btn">✕</button>
+    </div>
+    
+    <div class="response-content" id="response-content">
+      <div class="loading">
+        <div class="loading-spinner"></div>
+        <span>Working on it...</span>
+      </div>
+    </div>
+    
+    <div class="response-footer">
+      <button class="copy-btn" id="copy-btn">
+        <span class="copy-icon">📋</span>
+        <span>Copy</span>
+      </button>
+      <button class="ask-btn" id="ask-btn">Ask a question</button>
+    </div>
+    
+    <div class="chat-input-container" id="chat-input-container" style="display: none;">
+      <input type="text" class="chat-input" id="chat-input" placeholder="Ask a follow-up question...">
+      <button class="send-btn" id="send-btn">→</button>
+    </div>
+  </div>
+  
+  <!-- Copy notification -->
+  <div class="copy-notification" id="copy-notification" style="display: none;">
+    Copied to clipboard!
+  </div>
+  
+  <script src="response-window.js"></script>
+</body>
+</html>

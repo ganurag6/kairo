@@ -165,6 +165,12 @@ class KairoApp {
       console.error('❌ electronAPI.onCapturedText not found!');
     }
     
+    // Listen for suggestion clicks from action picker
+    if (window.electronAPI && window.electronAPI.onSuggestionClicked) {
+      window.electronAPI.onSuggestionClicked((suggestion) => this.handleSuggestionFromActionPicker(suggestion));
+      console.log('✅ Suggestion clicked listener added');
+    }
+    
     // Listen for manual text input in textarea
     if (this.selectedTextDisplay) {
       // Input event listener - only enable/disable analyze button
@@ -295,6 +301,20 @@ class KairoApp {
     this.chatInput.disabled = false;
     this.sendBtn.disabled = false;
     this.chatInput.focus();
+  }
+  
+  handleSuggestionFromActionPicker(suggestion) {
+    console.log('🎯 Suggestion clicked from action picker:', suggestion);
+    
+    // Show the action as a user message
+    this.addMessage('user', suggestion.text);
+    
+    // Mark this as an analysis request and process it
+    this.isAnalysisRequest = true;
+    this.processMessage(suggestion.prompt);
+    
+    // Hide suggestions after selection
+    this.hideSuggestions();
   }
   
   async generateSmartSuggestions(text) {

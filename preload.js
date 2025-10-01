@@ -4,6 +4,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onCapturedText: (callback) => {
     ipcRenderer.on('captured-text', (event, text) => callback(text));
   },
+  onSuggestionClicked: (callback) => {
+    ipcRenderer.on('suggestion-clicked', (event, suggestion) => callback(suggestion));
+  },
   hideWindow: () => {
     ipcRenderer.invoke('hide-window');
   },

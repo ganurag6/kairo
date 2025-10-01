@@ -3,6 +3,9 @@ const path = require('path');
 
 let tray = null;
 let overlayWindow = null;
+let actionPickerWindow = null;
+let responseWindow = null;
+let currentSelectedText = '';
 
 function createTray() {
   try {
@@ -82,6 +85,54 @@ function createTray() {
   tray.setContextMenu(contextMenu);
 }
 
+function createActionPickerWindow() {
+  actionPickerWindow = new BrowserWindow({
+    width: 540,
+    height: 120,
+    show: false,
+    frame: false,
+    resizable: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload-action-picker.js')
+    }
+  });
+
+  actionPickerWindow.loadFile('action-picker.html');
+  
+  actionPickerWindow.on('blur', () => {
+    setTimeout(() => {
+      if (actionPickerWindow && !actionPickerWindow.isDestroyed()) {
+        actionPickerWindow.hide();
+      }
+    }, 200);
+  });
+}
+
+function createResponseWindow() {
+  responseWindow = new BrowserWindow({
+    width: 600,
+    height: 400,
+    minWidth: 400,
+    minHeight: 200,
+    show: false,
+    frame: false,
+    transparent: false,
+    skipTaskbar: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload-response.js')
+    }
+  });
+
+  responseWindow.loadFile('response-window.html');
+}
+
 function createOverlayWindow() {
   overlayWindow = new BrowserWindow({
     width: 800,
@@ -112,8 +163,84 @@ function createOverlayWindow() {
   });
 }
 
+function showActionPicker() {
+  console.log('🎯 Showing action picker');
+  
+  // First copy selected text to clipboard
+  const { exec } = require('child_process');
+  
+  if (process.platform === 'darwin') {
+    // Copy selected text on macOS
+    exec('osascript -e \'tell application "System Events" to keystroke "c" using command down\'', (error) => {
+      if (error) {
+        console.error('Copy failed:', error);
+      }
+      
+      setTimeout(() => {
+        currentSelectedText = clipboard.readText();
+        
+        // Log what we actually captured
+        console.log('📋 Raw clipboard text:', currentSelectedText);
+        
+        // Try to detect and fix common list formatting issues
+        currentSelectedText = preserveListFormatting(currentSelectedText);
+        
+        if (!currentSelectedText || currentSelectedText.trim() === '') {
+          console.log('No text selected');
+          showOverlay();
+          return;
+        }
+        
+        showActionPickerAtMousePosition();
+      }, 100);
+    });
+  } else {
+    // For Windows/Linux, try to get clipboard directly
+    currentSelectedText = clipboard.readText();
+    
+    if (!currentSelectedText || currentSelectedText.trim() === '') {
+      console.log('No text selected');
+      showOverlay();
+      return;
+    }
+    
+    showActionPickerAtMousePosition();
+  }
+}
+
+function showActionPickerAtMousePosition() {
+  const { screen, BrowserWindow } = require('electron');
+  
+  // Get all displays
+  const displays = screen.getAllDisplays();
+  
+  // Try to find the active window's display
+  let activeDisplay = screen.getPrimaryDisplay();
+  
+  // Get the display where the mouse currently is (as a proxy for where the user is working)
+  const focusedWindow = BrowserWindow.getFocusedWindow();
+  if (focusedWindow) {
+    const bounds = focusedWindow.getBounds();
+    const centerX = bounds.x + bounds.width / 2;
+    const centerY = bounds.y + bounds.height / 2;
+    activeDisplay = screen.getDisplayNearestPoint({ x: centerX, y: centerY });
+  }
+  
+  // Position the action picker in the center of the active display
+  const windowWidth = 540;
+  const windowHeight = 120;
+  const x = Math.round(activeDisplay.bounds.x + (activeDisplay.bounds.width - windowWidth) / 2);
+  const y = Math.round(activeDisplay.bounds.y + (activeDisplay.bounds.height - windowHeight) / 2);
+  
+  if (actionPickerWindow) {
+    actionPickerWindow.setPosition(x, y);
+    actionPickerWindow.show();
+    actionPickerWindow.focus();
+  }
+}
+
 async function showOverlay() {
-  console.log('\n=== SHORTCUT PRESSED! ===');
+  console.log('\n=== SHOWING OLD OVERLAY FOR TYPING ===');
   
   // Store the frontmost app
   const { exec } = require('child_process');
@@ -241,6 +368,8 @@ app.whenReady().then(() => {
   }
   
   createOverlayWindow();
+  createActionPickerWindow();
+  createResponseWindow();
   
   // On Windows, show a welcome message on first launch
   if (process.platform === 'win32') {
@@ -259,7 +388,7 @@ app.whenReady().then(() => {
   setTimeout(() => {
     const ret = globalShortcut.register('CommandOrControl+K', () => {
       console.log('Cmd/Ctrl+K pressed!');
-      showOverlay();
+      showActionPicker();
     });
     
     if (!ret) {
@@ -332,3 +461,149 @@ ipcMain.handle('copy-to-clipboard', (event, text) => {
     throw error;
   }
 });
+
+// Action picker handlers
+ipcMain.handle('action-selected', async (event, { action, prompt }) => {
+  console.log('Action selected:', action);
+  
+  // Hide action picker
+  if (actionPickerWindow) {
+    actionPickerWindow.hide();
+  }
+  
+  // Show main overlay window instead of response window
+  if (!overlayWindow) {
+    createOverlayWindow();
+  }
+  
+  overlayWindow.center();
+  overlayWindow.show();
+  overlayWindow.focus();
+  
+  // Send the selected text and action to the main chat window
+  setTimeout(() => {
+    if (currentSelectedText && currentSelectedText.trim() !== '') {
+      overlayWindow.webContents.send('captured-text', currentSelectedText);
+      
+      // After a brief delay, send the action as a suggestion click
+      setTimeout(() => {
+        overlayWindow.webContents.send('suggestion-clicked', {
+          text: action,
+          prompt: prompt
+        });
+      }, 200);
+    }
+  }, 100);
+});
+
+ipcMain.handle('close-action-picker', () => {
+  if (actionPickerWindow) {
+    actionPickerWindow.hide();
+  }
+});
+
+ipcMain.handle('close-response-window', () => {
+  if (responseWindow) {
+    responseWindow.hide();
+  }
+});
+
+ipcMain.handle('switch-to-chat', () => {
+  if (responseWindow) {
+    responseWindow.hide();
+  }
+  showOverlay();
+});
+
+// Helper function to detect list patterns
+function detectListPattern(text) {
+  const lines = text.split('\n').filter(line => line.trim());
+  
+  // Check for multiple lines starting with similar patterns
+  if (lines.length >= 2) {
+    // Common patterns that indicate list items
+    const listPatterns = [
+      /^(Yes|No|Since|Because|First|Second|Third|Also|Additionally|Furthermore|Moreover)/i,
+      /^[A-Z][a-z]+,/, // Words starting with capital followed by comma
+      /^[•·▪▫◦‣⁃]\s/, // Bullet points
+    ];
+    
+    let matchCount = 0;
+    for (const line of lines) {
+      for (const pattern of listPatterns) {
+        if (line.trim().match(pattern)) {
+          matchCount++;
+          break;
+        }
+      }
+    }
+    
+    // If multiple lines match patterns, it's likely a list
+    if (matchCount >= 2) {
+      console.log(`📝 Detected list-like structure (${matchCount} matching lines)`);
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// Helper function to preserve list formatting
+function preserveListFormatting(text) {
+  const hasListPattern = detectListPattern(text);
+  
+  if (hasListPattern) {
+    console.log('📋 Text appears to be a list without numbers');
+    // The prompts now handle this, so we just log it
+  }
+  
+  return text;
+}
+
+// Helper function to call OpenAI
+async function callOpenAI(prompt, apiKey) {
+  console.log('\n=== OPENAI API CALL ===');
+  console.log('📤 Sending to ChatGPT:');
+  console.log('System prompt:', 'You are a helpful assistant that provides precise, ready-to-use text responses...');
+  console.log('User prompt:', prompt);
+  console.log('======================\n');
+  
+  try {
+    const requestBody = {
+      model: 'gpt-3.5-turbo',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful assistant that provides precise, ready-to-use text responses. Always respond with the exact text the user requested, without any additional explanation. IMPORTANT: Preserve line breaks and paragraph spacing. If the input has multiple paragraphs or list items, ensure there are blank lines between them in your response. Format lists with proper spacing between items.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 500
+    };
+    
+    console.log('Full request:', JSON.stringify(requestBody, null, 2));
+    
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    const data = await response.json();
+    if (data.error) {
+      throw new Error(data.error.message);
+    }
+    
+    return data.choices[0].message.content;
+  } catch (error) {
+    console.error('OpenAI API error:', error);
+    return `Error: ${error.message}`;
+  }
+}
