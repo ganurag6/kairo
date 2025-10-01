@@ -186,6 +186,9 @@ class KairoApp {
         // Update current text for analyze button to use
         this.currentText = text;
         
+        // Auto-resize the textarea
+        this.autoResizeTextArea();
+        
         // Enable chat if not already enabled
         if (this.chatInput && this.chatInput.disabled) {
           this.chatInput.disabled = false;
@@ -195,28 +198,18 @@ class KairoApp {
         }
       });
       
-      // Add Enter key handler for sending messages
+      // Add Enter key handler for analyze
       this.selectedTextDisplay.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
           const text = this.selectedTextDisplay.value.trim();
-          if (text) {
-            console.log('📝 Enter pressed in textarea, sending as chat message');
-            this.handleUserMessage(text);
-            this.selectedTextDisplay.value = ''; // Clear after sending
+          if (text && this.analyzeBtn && !this.analyzeBtn.disabled) {
+            console.log('🚀 Enter pressed in textarea, triggering analyze');
+            this.analyzeBtn.click();
           }
         }
       });
-      console.log('✅ Textarea input listener added');
-      
-      // Also check for enter key in the main window when textarea is focused
-      this.selectedTextDisplay.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey && this.analyzeBtn && !this.analyzeBtn.disabled) {
-          e.preventDefault();
-          console.log('🚀 Enter pressed in textarea, triggering analyze');
-          this.analyzeBtn.click();
-        }
-      });
+      console.log('✅ Textarea enter key listener added');
     }
     
     // Analyze button click
@@ -289,6 +282,9 @@ class KairoApp {
     
     // Display the full selected text in textarea
     this.selectedTextDisplay.value = text;
+    
+    // Auto-resize the textarea based on content
+    this.autoResizeTextArea();
     
     // Clear chat and show welcome for new text
     this.clearChatMessages();
@@ -707,6 +703,26 @@ class KairoApp {
   autoResizeInput() {
     this.chatInput.style.height = 'auto';
     this.chatInput.style.height = Math.min(this.chatInput.scrollHeight, 120) + 'px';
+  }
+  
+  autoResizeTextArea() {
+    if (!this.selectedTextDisplay) return;
+    
+    // Reset height to auto to get accurate scrollHeight
+    this.selectedTextDisplay.style.height = 'auto';
+    
+    // Calculate the desired height based on content
+    let desiredHeight = this.selectedTextDisplay.scrollHeight;
+    
+    // Set min and max constraints
+    const minHeight = 80; // Minimum height in pixels
+    const maxHeight = 250; // Maximum height in pixels (increased from CSS 150px for very long texts)
+    
+    // Apply the calculated height with constraints
+    const finalHeight = Math.max(minHeight, Math.min(desiredHeight, maxHeight));
+    this.selectedTextDisplay.style.height = finalHeight + 'px';
+    
+    console.log(`📐 Text area resized: content=${desiredHeight}px, final=${finalHeight}px`);
   }
   
   disableInput() {
