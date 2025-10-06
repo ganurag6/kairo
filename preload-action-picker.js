@@ -6,5 +6,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   closeActionPicker: () => {
     ipcRenderer.invoke('close-action-picker');
+  },
+  saveTask: (taskData) => {
+    return ipcRenderer.invoke('save-task', taskData);
   }
 });

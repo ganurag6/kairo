@@ -18,5 +18,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   copyToClipboard: (text) => {
     return ipcRenderer.invoke('copy-to-clipboard', text);
+  },
+  // Task management
+  saveTask: (taskData) => {
+    return ipcRenderer.invoke('save-task', taskData);
+  },
+  getTasks: () => {
+    return ipcRenderer.invoke('get-tasks');
+  },
+  updateTask: (id, updates) => {
+    return ipcRenderer.invoke('update-task', id, updates);
+  },
+  completeTask: (id) => {
+    return ipcRenderer.invoke('complete-task', id);
+  },
+  deleteTask: (id) => {
+    return ipcRenderer.invoke('delete-task', id);
+  },
+  onTaskSaved: (callback) => {
+    ipcRenderer.on('task-saved', (event, task) => callback(task));
   }
 });

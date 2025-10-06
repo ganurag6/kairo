@@ -44,12 +44,51 @@
       </div>
     </div>
     
-    <div class="chat-container">
-      <div id="chat-messages" class="chat-messages">
-        <div class="welcome-message">
-          <h3>👋 Welcome to Kairo!</h3>
-          <p>Select any text and press <kbd>Cmd+K</kbd> to start.</p>
-          <p style="margin-top: 12px; font-size: 13px; color: #60a5fa;">Smarter tasks, simpler life.</p>
+    <!-- Tab Navigation -->
+    <div class="tab-navigation">
+      <button class="tab-btn active" data-tab="chat">Chat</button>
+      <button class="tab-btn" data-tab="tasks">Tasks</button>
+      <button class="tab-btn" data-tab="notes">Notes</button>
+    </div>
+    
+    <!-- Tab Content Areas -->
+    <div class="tab-content">
+      <!-- Chat Tab -->
+      <div id="chat-tab" class="tab-pane active">
+        <div class="chat-container">
+          <div id="chat-messages" class="chat-messages">
+            <div class="welcome-message">
+              <h3>👋 Welcome to Kairo!</h3>
+              <p>Select any text and press <kbd>Cmd+K</kbd> to start.</p>
+              <p style="margin-top: 12px; font-size: 13px; color: #60a5fa;">Smarter tasks, simpler life.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Tasks Tab -->
+      <div id="tasks-tab" class="tab-pane">
+        <div class="tasks-container">
+          <div class="tasks-header">
+            <h3>My Tasks</h3>
+            <button id="refresh-tasks" class="refresh-btn">↻</button>
+          </div>
+          <div id="tasks-list" class="tasks-list">
+            <div class="tasks-loading">Loading tasks...</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Notes Tab -->
+      <div id="notes-tab" class="tab-pane">
+        <div class="notes-container">
+          <div class="notes-header">
+            <h3>My Notes</h3>
+            <button id="refresh-notes" class="refresh-btn">↻</button>
+          </div>
+          <div id="notes-list" class="notes-list">
+            <div class="notes-placeholder">Notes feature coming soon...</div>
+          </div>
         </div>
       </div>
     </div>

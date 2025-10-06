@@ -6,7 +6,7 @@
 }
 
 body {
-  background: #1a1a1a;
+  background: transparent;
   color: #e5e7eb;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 14px;
@@ -20,10 +20,13 @@ body {
   padding: 12px;
   background: #1a1a1a;
   border-radius: 12px;
+  border: 1px solid #2d2d2d;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   width: 520px;
   max-width: 100%;
   -webkit-app-region: drag; /* Make window draggable */
   cursor: move;
+  overflow: hidden; /* Ensures content respects border-radius */
 }
 
 .actions-grid {
@@ -89,4 +92,34 @@ body {
 
 .action-picker {
   animation: fadeIn 0.15s ease-out;
+}
+
+/* Feedback message */
+.feedback {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #10b981;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  display: none;
+  z-index: 1000;
+  animation: feedbackSlide 0.3s ease-out;
+}
+
+@keyframes feedbackSlide {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }

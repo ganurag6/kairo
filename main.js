@@ -1,13 +1,23 @@
-const { app, BrowserWindow, globalShortcut, clipboard, Tray, Menu, ipcMain, nativeImage } = require('electron');
+const { app, BrowserWindow, globalShortcut, clipboard, Tray, Menu, ipcMain, nativeImage, screen } = require('electron');
 const path = require('path');
+const { exec } = require('child_process');
+const taskManager = require('./data/taskManager');
+const debugLogger = require('./debug-logger');
+const SimpleTaskStore = require('./simple-task-store');
+
+// Memory optimization flags
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096 --expose-gc');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
 
 let tray = null;
 let overlayWindow = null;
 let actionPickerWindow = null;
 let responseWindow = null;
 let currentSelectedText = '';
+let taskStore = null;
 
 function createTray() {
+  debugLogger.log('createTray:start');
   try {
     // Create tray icon for Windows/Linux
     if (process.platform !== 'darwin') {
@@ -86,15 +96,18 @@ function createTray() {
 }
 
 function createActionPickerWindow() {
+  debugLogger.log('createActionPickerWindow:start');
   actionPickerWindow = new BrowserWindow({
     width: 540,
-    height: 120,
+    height: 80,
     show: false,
     frame: false,
     resizable: false,
     transparent: true,
     alwaysOnTop: true,
     skipTaskbar: true,
+    roundedCorners: true,  // Force rounded corners on Windows
+    backgroundColor: '#00000000', // Fully transparent background
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -103,6 +116,7 @@ function createActionPickerWindow() {
   });
 
   actionPickerWindow.loadFile('action-picker.html');
+  debugLogger.log('createActionPickerWindow:loaded');
   
   actionPickerWindow.on('blur', () => {
     setTimeout(() => {
@@ -114,6 +128,7 @@ function createActionPickerWindow() {
 }
 
 function createResponseWindow() {
+  debugLogger.log('createResponseWindow:start');
   responseWindow = new BrowserWindow({
     width: 600,
     height: 400,
@@ -131,9 +146,11 @@ function createResponseWindow() {
   });
 
   responseWindow.loadFile('response-window.html');
+  debugLogger.log('createResponseWindow:loaded');
 }
 
 function createOverlayWindow() {
+  debugLogger.log('createOverlayWindow:start');
   overlayWindow = new BrowserWindow({
     width: 800,
     height: 700,
@@ -150,6 +167,7 @@ function createOverlayWindow() {
   });
 
   overlayWindow.loadFile('index.html');
+  debugLogger.log('createOverlayWindow:loaded');
   
   // Only open DevTools in development
   if (process.env.NODE_ENV === 'development') {
@@ -165,9 +183,9 @@ function createOverlayWindow() {
 
 function showActionPicker() {
   console.log('🎯 Showing action picker');
+  debugLogger.log('showActionPicker:start');
   
   // First copy selected text to clipboard
-  const { exec } = require('child_process');
   
   if (process.platform === 'darwin') {
     // Copy selected text on macOS
@@ -209,7 +227,6 @@ function showActionPicker() {
 }
 
 function showActionPickerAtMousePosition() {
-  const { screen, BrowserWindow } = require('electron');
   
   // Get all displays
   const displays = screen.getAllDisplays();
@@ -243,7 +260,6 @@ async function showOverlay() {
   console.log('\n=== SHOWING OLD OVERLAY FOR TYPING ===');
   
   // Store the frontmost app
-  const { exec } = require('child_process');
   
   // Platform-specific copy command
   if (process.platform === 'darwin') {
@@ -337,8 +353,16 @@ async function showOverlay() {
   }
 }
 
+debugLogger.log('app:starting');
+
 app.whenReady().then(() => {
   console.log('App is ready!');
+  debugLogger.log('app:ready');
+  
+  // Initialize simple task store
+  const tasksPath = path.join(app.getPath('userData'), 'kairo-data', 'tasks.json');
+  taskStore = new SimpleTaskStore(tasksPath);
+  debugLogger.log('taskStore:initialized');
   
   // Force the app to show in dock
   if (process.platform === 'darwin') {
@@ -360,6 +384,20 @@ app.whenReady().then(() => {
     });
   }
   
+  // Set up periodic cleanup to prevent memory issues
+  // COMMENTING OUT - THIS MIGHT BE CAUSING MEMORY LEAK
+  // const storage = require('./data/storage');
+  // setInterval(async () => {
+  //   try {
+  //     const result = await storage.cleanupOldData();
+  //     if (result.tasksRemoved > 0 || result.notesRemoved > 0) {
+  //       console.log('🧹 Periodic cleanup completed:', result);
+  //     }
+  //   } catch (error) {
+  //     console.error('Error during periodic cleanup:', error);
+  //   }
+  // }, 3600000); // Run every hour
+  
   // Try to create tray but don't fail if it doesn't work
   try {
     createTray();
@@ -367,9 +405,18 @@ app.whenReady().then(() => {
     console.log('Tray creation failed, continuing without tray:', error.message);
   }
   
+  debugLogger.log('windows:creating-all');
   createOverlayWindow();
   createActionPickerWindow();
   createResponseWindow();
+  debugLogger.log('windows:all-created');
+  
+  // Start memory monitoring interval
+  setInterval(() => {
+    debugLogger.log('memory:interval-check');
+    // Temporarily disable forceGC to see if it's causing issues
+    // debugLogger.forceGC();
+  }, 30000); // Every 30 seconds
   
   // On Windows, show a welcome message on first launch
   if (process.platform === 'win32') {
@@ -471,7 +518,18 @@ ipcMain.handle('action-selected', async (event, { action, prompt }) => {
     actionPickerWindow.hide();
   }
   
-  // Show main overlay window instead of response window
+  // Handle special actions
+  if (action === 'save-task') {
+    // Task saving is handled separately
+    return;
+  }
+  
+  if (action === 'save-note') {
+    // Note saving is handled separately
+    return;
+  }
+  
+  // Show main overlay window for text enhancement actions
   if (!overlayWindow) {
     createOverlayWindow();
   }
@@ -513,6 +571,83 @@ ipcMain.handle('switch-to-chat', () => {
     responseWindow.hide();
   }
   showOverlay();
+});
+
+// Task management handlers
+ipcMain.handle('save-task', async (event, taskData) => {
+  try {
+    console.log('📌 Saving task with simple store:', taskData);
+    
+    // Get the text to save
+    const textToSave = taskData.text === 'Task from selected text' 
+      ? currentSelectedText 
+      : taskData.text;
+    
+    if (!textToSave || textToSave.trim() === '') {
+      return { success: false, error: 'No text to save as task' };
+    }
+    
+    // Simple task object
+    const task = {
+      id: Date.now().toString(),
+      text: textToSave,
+      createdAt: new Date().toISOString(),
+      status: 'pending'
+    };
+    
+    // Save using simple store
+    const saved = await taskStore.save(task);
+    
+    if (saved) {
+      console.log('✅ Task saved successfully');
+      return { success: true, task };
+    } else {
+      return { success: false, error: 'Failed to save task' };
+    }
+  } catch (error) {
+    console.error('❌ Error saving task:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('get-tasks', async () => {
+  try {
+    const tasks = await taskManager.getAllTasks();
+    return { success: true, tasks };
+  } catch (error) {
+    console.error('❌ Error getting tasks:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('update-task', async (event, id, updates) => {
+  try {
+    const task = await taskManager.updateTask(id, updates);
+    return { success: true, task };
+  } catch (error) {
+    console.error('❌ Error updating task:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('complete-task', async (event, id) => {
+  try {
+    const task = await taskManager.completeTask(id);
+    return { success: true, task };
+  } catch (error) {
+    console.error('❌ Error completing task:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('delete-task', async (event, id) => {
+  try {
+    await taskManager.deleteTask(id);
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error deleting task:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 // Helper function to detect list patterns

@@ -1,7 +1,54 @@
+// Renderer memory tracker
+class RendererMemoryTracker {
+  constructor() {
+    this.operations = [];
+    this.logCount = 0;
+  }
+  
+  log(operation, details = '') {
+    this.logCount++;
+    
+    if (performance && performance.memory) {
+      const memory = performance.memory;
+      const stats = {
+        operation,
+        details,
+        usedMB: (memory.usedJSHeapSize / 1024 / 1024).toFixed(1),
+        totalMB: (memory.totalJSHeapSize / 1024 / 1024).toFixed(1),
+        limitMB: (memory.jsHeapSizeLimit / 1024 / 1024).toFixed(1),
+        usage: ((memory.usedJSHeapSize / memory.jsHeapSizeLimit) * 100).toFixed(1)
+      };
+      
+      console.log(`[RENDERER-${this.logCount}] ${operation} - Memory: ${stats.usedMB}MB/${stats.limitMB}MB (${stats.usage}%)`);
+      if (details) console.log(`  Details: ${details}`);
+      
+      this.operations.push(stats);
+      if (this.operations.length > 50) this.operations.shift();
+      
+      // Alert if memory is high
+      if (parseFloat(stats.usage) > 80) {
+        console.error(`🚨 RENDERER HIGH MEMORY: ${stats.usage}% of limit used!`);
+        this.analyzeGrowth();
+      }
+    }
+  }
+  
+  analyzeGrowth() {
+    if (this.operations.length < 5) return;
+    console.log('\n📊 RENDERER MEMORY GROWTH:');
+    this.operations.slice(-5).forEach((op, i) => {
+      console.log(`  ${op.operation}: ${op.usedMB}MB`);
+    });
+  }
+}
+
+const rendererTracker = new RendererMemoryTracker();
+
 // New Chat-based Kairo Renderer
 class KairoApp {
   constructor() {
     console.log('🚀 KairoApp constructor called');
+    rendererTracker.log('KairoApp:constructor:start');
     
     try {
       // Check if TextDetector is available
@@ -10,10 +57,11 @@ class KairoApp {
         // Create a fallback
         this.textDetector = {
           getSuggestions: () => [
-            { icon: '🔍', text: 'Fix Grammar', prompt: 'Correct all grammar and spelling mistakes in this text' },
-            { icon: '✂️', text: 'Make Concise', prompt: 'Make this text more concise while keeping all important information' },
-            { icon: '✍️', text: 'Professional Rewrite', prompt: 'Rewrite this text to be more professional and polished' },
-            { icon: '📋', text: 'Summarize', prompt: 'Create a clear, concise summary of this text' }
+            { text: 'Make Concise', prompt: 'Make this text more concise while keeping all important information' },
+            { text: 'Explain', prompt: 'Explain this text in simple, easy-to-understand terms' },
+            { text: 'Save Task', prompt: 'save-task' },
+            { text: 'Save Note', prompt: 'save-note' },
+            { text: 'Custom', prompt: 'custom' }
           ]
         };
       } else {
@@ -21,18 +69,25 @@ class KairoApp {
       }
       
       this.conversation = [];
+      this.maxConversationLength = 20; // Limit conversation history to prevent memory issues
       this.currentText = '';
       this.isProcessing = false;
       this.isAnalysisRequest = false;
       
       console.log('🔧 Initializing elements...');
+      rendererTracker.log('initializeElements:start');
       this.initializeElements();
+      rendererTracker.log('initializeElements:complete');
       
       console.log('🎧 Setting up event listeners...');
+      rendererTracker.log('setupEventListeners:start');
       this.setupEventListeners();
+      rendererTracker.log('setupEventListeners:complete');
       
       console.log('⌨️ Setting up keyboard shortcuts...');
+      rendererTracker.log('setupKeyboardShortcuts:start');
       this.setupKeyboardShortcuts();
+      rendererTracker.log('setupKeyboardShortcuts:complete');
       
       console.log('✅ KairoApp initialized successfully');
       
@@ -40,7 +95,9 @@ class KairoApp {
       setTimeout(() => {
         if (this.chatMessages) {
           console.log('🧪 Adding test message...');
+          rendererTracker.log('addTestMessage:start');
           this.addMessage('system', 'Kairo is ready! Select text and press Cmd+K to start.');
+          rendererTracker.log('addTestMessage:complete');
         } else {
           console.error('❌ chatMessages element not found after initialization');
         }
@@ -68,10 +125,18 @@ class KairoApp {
     this.defaultSuggestionsContainer = document.getElementById('default-suggestions');
     this.aiSuggestionsContainer = document.getElementById('ai-suggestions');
     
+    // Tab elements
+    this.tabButtons = document.querySelectorAll('.tab-btn');
+    this.tabPanes = document.querySelectorAll('.tab-pane');
+    
     // Chat elements
     this.chatMessages = document.getElementById('chat-messages');
     this.chatInput = document.getElementById('chat-input');
     this.sendBtn = document.getElementById('send-btn');
+    
+    // Tasks elements
+    this.tasksList = document.getElementById('tasks-list');
+    this.refreshTasksBtn = document.getElementById('refresh-tasks');
     
     // Loading
     this.loadingDiv = document.getElementById('loading');
@@ -87,13 +152,13 @@ class KairoApp {
     if (!this.sendBtn) console.error('❌ sendBtn not found!');
     if (!this.chatMessages) console.error('❌ chatMessages not found!');
     
-    // Define default actions
+    // Define default actions (matching the 5 options from textDetector)
     this.defaultActions = [
-      { icon: '🔍', text: 'Fix Grammar', prompt: 'Correct all grammar and spelling mistakes in this text' },
-      { icon: '✂️', text: 'Make Concise', prompt: 'Make this text more concise while keeping all important information' },
-      { icon: '✍️', text: 'Professional Rewrite', prompt: 'Rewrite this text to be more professional and polished' },
-      { icon: '📋', text: 'Summarize', prompt: 'Create a clear, concise summary of this text' },
-      { icon: '💬', text: 'Explain Simply', prompt: 'Explain this text in simple terms that anyone can understand' }
+      { text: 'Make Concise', prompt: 'Make this text more concise while keeping all important information' },
+      { text: 'Explain', prompt: 'Explain this text in simple, easy-to-understand terms' },
+      { text: 'Save Task', prompt: 'save-task' },
+      { text: 'Save Note', prompt: 'save-note' },
+      { text: 'Custom', prompt: 'custom' }
     ];
   }
   
@@ -170,6 +235,31 @@ class KairoApp {
       window.electronAPI.onSuggestionClicked((suggestion) => this.handleSuggestionFromActionPicker(suggestion));
       console.log('✅ Suggestion clicked listener added');
     }
+    
+    // Tab switching
+    this.tabButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        const targetTab = e.target.dataset.tab;
+        this.switchTab(targetTab);
+      });
+    });
+    
+    // Tasks refresh button
+    if (this.refreshTasksBtn) {
+      // Temporarily disabled to test memory issue
+      // this.refreshTasksBtn.addEventListener('click', () => this.loadTasks());
+      console.log('✅ Refresh tasks button listener disabled for testing');
+    }
+    
+    // DISABLED - Listen for task saved events
+    // if (window.electronAPI && window.electronAPI.onTaskSaved) {
+    //   window.electronAPI.onTaskSaved((task) => {
+    //     console.log('📌 Task saved event received:', task);
+    //     // Temporarily disabled to test memory issue
+    //     // this.loadTasks(); // Refresh task list
+    //   });
+    //   console.log('✅ Task saved listener added (but loadTasks disabled for testing)');
+    // }
     
     // Listen for manual text input in textarea
     if (this.selectedTextDisplay) {
@@ -339,7 +429,7 @@ class KairoApp {
     this.defaultActions.forEach(action => {
       const btn = document.createElement('button');
       btn.className = 'suggestion-btn';
-      btn.innerHTML = `${action.icon} ${action.text}`;
+      btn.textContent = action.text;
       
       // Add click handler with debugging
       const clickHandler = () => {
@@ -374,7 +464,7 @@ class KairoApp {
       suggestions.forEach((suggestion, index) => {
         const btn = document.createElement('button');
         btn.className = 'suggestion-btn ai-suggestion';
-        btn.innerHTML = `${suggestion.icon} ${suggestion.text}`;
+        btn.textContent = suggestion.text;
         btn.addEventListener('click', () => {
           console.log(`🎯 User clicked AI suggestion: ${suggestion.text}`);
           this.sendSuggestionMessage(suggestion);
@@ -458,6 +548,7 @@ class KairoApp {
   
   async processMessage(prompt) {
     console.log('🚀 Processing message:', prompt);
+    rendererTracker.log('processMessage:start', `prompt: ${prompt.substring(0, 50)}...`);
     console.log('🔄 isProcessing before check:', this.isProcessing);
     console.log('📝 Current text:', this.currentText);
     console.log('📝 Current text length:', this.currentText ? this.currentText.length : 0);
@@ -521,11 +612,22 @@ class KairoApp {
       this.hideTypingIndicator();
       this.addMessage('assistant', aiResponse);
       
-      // Add to conversation history
+      // Add to conversation history with memory management
       this.conversation.push(
         { role: 'user', content: prompt },
         { role: 'assistant', content: aiResponse }
       );
+      
+      // Trim conversation history to prevent memory overflow
+      if (this.conversation.length > this.maxConversationLength) {
+        // Keep system message if present, then trim oldest messages
+        const hasSystemMessage = this.conversation[0]?.role === 'system';
+        if (hasSystemMessage) {
+          this.conversation = [this.conversation[0], ...this.conversation.slice(-this.maxConversationLength + 1)];
+        } else {
+          this.conversation = this.conversation.slice(-this.maxConversationLength);
+        }
+      }
       
     } catch (error) {
       console.error('❌ Processing error:', error);
@@ -534,6 +636,7 @@ class KairoApp {
     } finally {
       this.isProcessing = false;
       this.enableInput();
+      rendererTracker.log('processMessage:complete');
     }
   }
   
@@ -580,6 +683,23 @@ class KairoApp {
     if (!this.chatMessages) {
       console.error(`❌ chatMessages element not found! Cannot add message.`);
       return;
+    }
+    
+    // Limit DOM messages to prevent memory issues
+    const maxDomMessages = 50;
+    const currentMessages = this.chatMessages.querySelectorAll('.message');
+    if (currentMessages.length >= maxDomMessages) {
+      // Remove oldest messages, keeping at least the last 40
+      const messagesToRemove = currentMessages.length - 40;
+      for (let i = 0; i < messagesToRemove; i++) {
+        const oldMessage = currentMessages[i];
+        // Remove event listeners before removing element
+        const copyBtn = oldMessage.querySelector('.message-copy-btn');
+        if (copyBtn) {
+          copyBtn.replaceWith(copyBtn.cloneNode(true));
+        }
+        oldMessage.remove();
+      }
     }
     
     const messageDiv = document.createElement('div');
@@ -810,13 +930,177 @@ class KairoApp {
       this.smartSuggestions.style.display = 'block';
     }
   }
+  
+  // Tab Management
+  switchTab(tabName) {
+    console.log('🔄 Switching to tab:', tabName);
+    
+    // Update tab buttons
+    this.tabButtons.forEach(btn => {
+      btn.classList.remove('active');
+      if (btn.dataset.tab === tabName) {
+        btn.classList.add('active');
+      }
+    });
+    
+    // Update tab panes
+    this.tabPanes.forEach(pane => {
+      pane.classList.remove('active');
+      if (pane.id === `${tabName}-tab`) {
+        pane.classList.add('active');
+      }
+    });
+    
+    // Load data for specific tabs
+    // Temporarily disabled to test memory issue
+    // if (tabName === 'tasks') {
+    //   this.loadTasks();
+    // }
+  }
+  
+  // Task Management
+  async loadTasks() {
+    console.log('📋 Loading tasks...');
+    
+    if (!this.tasksList) {
+      console.error('❌ Tasks list element not found');
+      return;
+    }
+    
+    try {
+      // Show loading state
+      this.tasksList.innerHTML = '<div class="tasks-loading">Loading tasks...</div>';
+      
+      const result = await window.electronAPI.getTasks();
+      
+      if (result.success) {
+        this.displayTasks(result.tasks);
+      } else {
+        console.error('❌ Failed to load tasks:', result.error);
+        this.tasksList.innerHTML = '<div class="tasks-empty">Failed to load tasks</div>';
+      }
+    } catch (error) {
+      console.error('❌ Error loading tasks:', error);
+      this.tasksList.innerHTML = '<div class="tasks-empty">Error loading tasks</div>';
+    }
+  }
+  
+  displayTasks(tasks) {
+    console.log('📋 Displaying tasks:', tasks.length);
+    
+    if (!tasks || tasks.length === 0) {
+      this.tasksList.innerHTML = '<div class="tasks-empty">No tasks yet. Select text and click "Save Task" to get started!</div>';
+      return;
+    }
+    
+    // Group tasks by status and date
+    const pendingTasks = tasks.filter(t => t.status === 'pending');
+    const completedTasks = tasks.filter(t => t.status === 'completed');
+    
+    let html = '';
+    
+    if (pendingTasks.length > 0) {
+      html += '<div class="task-section"><h4>Pending Tasks</h4>';
+      pendingTasks.forEach(task => {
+        html += this.createTaskHTML(task);
+      });
+      html += '</div>';
+    }
+    
+    if (completedTasks.length > 0) {
+      html += '<div class="task-section"><h4>Completed</h4>';
+      completedTasks.forEach(task => {
+        html += this.createTaskHTML(task);
+      });
+      html += '</div>';
+    }
+    
+    this.tasksList.innerHTML = html;
+    
+    // Add event listeners to checkboxes
+    this.tasksList.querySelectorAll('.task-checkbox').forEach(checkbox => {
+      checkbox.addEventListener('click', (e) => {
+        const taskId = e.target.dataset.taskId;
+        const isCompleted = e.target.classList.contains('completed');
+        this.toggleTask(taskId, !isCompleted);
+      });
+    });
+  }
+  
+  createTaskHTML(task) {
+    const isCompleted = task.status === 'completed';
+    const dueInfo = this.formatDueDate(task.dueDate);
+    
+    return `
+      <div class="task-item">
+        <div class="task-header">
+          <div class="task-checkbox ${isCompleted ? 'completed' : ''}" data-task-id="${task.id}"></div>
+          <div class="task-text ${isCompleted ? 'completed' : ''}">${task.text}</div>
+        </div>
+        <div class="task-meta">
+          ${dueInfo ? `<span class="task-due ${dueInfo.class}">${dueInfo.text}</span>` : ''}
+          ${task.tags && task.tags.length > 0 ? task.tags.map(tag => `<span class="task-tag">${tag}</span>`).join('') : ''}
+          <span class="task-created">${this.formatDate(task.createdAt)}</span>
+        </div>
+      </div>
+    `;
+  }
+  
+  formatDueDate(dueDate) {
+    if (!dueDate) return null;
+    
+    const due = new Date(dueDate);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+    
+    if (dueDay.getTime() === today.getTime()) {
+      return { text: 'Due Today', class: 'today' };
+    } else if (dueDay < today) {
+      return { text: 'Overdue', class: 'overdue' };
+    } else {
+      const diffDays = Math.ceil((dueDay - today) / (1000 * 60 * 60 * 24));
+      if (diffDays === 1) {
+        return { text: 'Due Tomorrow', class: '' };
+      } else if (diffDays <= 7) {
+        return { text: `Due in ${diffDays} days`, class: '' };
+      } else {
+        return { text: due.toLocaleDateString(), class: '' };
+      }
+    }
+  }
+  
+  formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  
+  async toggleTask(taskId, completed) {
+    try {
+      const result = await window.electronAPI.updateTask(taskId, {
+        status: completed ? 'completed' : 'pending'
+      });
+      
+      if (result.success) {
+        console.log('✅ Task updated successfully');
+        // Temporarily disabled to test memory issue
+        // this.loadTasks(); // Refresh the list
+      } else {
+        console.error('❌ Failed to update task:', result.error);
+      }
+    } catch (error) {
+      console.error('❌ Error updating task:', error);
+    }
+  }
 }
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
   console.log('🚀 DOM loaded, initializing Kairo...');
+  rendererTracker.log('DOM:loaded');
   window.kairoApp = new KairoApp();
   console.log('✨ Kairo Chat Interface Initialized!');
+  rendererTracker.log('KairoApp:initialized');
   
   // Add debug functions to window for debugging
   window.testFunction = () => {
