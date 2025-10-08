@@ -1,19 +1,47 @@
 // Action picker logic
 const actionButtons = document.querySelectorAll('.action-btn');
+let isScreenshot = false;
 
-// Define actions with their prompts
-const actions = {
-  'fix-grammar': 'Fix all grammar and spelling mistakes in this text. If the text contains multiple points or paragraphs starting with similar patterns, preserve the list structure with proper numbering (1. 2. etc) and add a blank line between each numbered item. Return only the corrected text with proper spacing.',
-  'make-concise': 'Make this text more concise while keeping all important information. If the text contains multiple points, preserve the numbered list format with blank lines between items. Return only the concise version with proper spacing.',
-  'professional': 'Rewrite this text to be more professional and polished. If the text contains multiple points, preserve the numbered list format. Return only the rewritten text.',
-  'summarize': 'Create a clear, concise summary of this text. If the original has multiple points, summarize as a numbered list. Return only the summary.',
-  'explain': 'Explain this text in simple terms that anyone can understand. If there are multiple points, keep them numbered. Be brief and clear.',
-  'translate': 'Translate this text to [target language]. Preserve any numbered list formatting. Return only the translation.',
-  'expand': 'Expand this text with more detail and context while maintaining the same tone. If the text has multiple points, keep the numbered format. Return only the expanded text.',
-  'simplify': 'Simplify this text to be easily understood by a general audience. If the text has multiple points, keep them numbered. Return only the simplified text.',
-  'key-points': 'Extract the key points from this text as a numbered list (1. 2. 3. etc). Return only the numbered points.',
+// Define actions with their prompts for text
+const textActions = {
+  'fix-grammar': 'Fix all grammar and spelling mistakes in this text.',
+  'make-concise': 'Make this text more concise while keeping all important information.',
+  'professional': 'Rewrite this text to be more professional and polished.',
+  'summarize': 'Create a clear, concise summary of this text.',
+  'explain': 'Explain this text in simple terms that anyone can understand.',
+  'translate': 'Translate this text to [target language].',
+  'expand': 'Expand this text with more detail and context while maintaining the same tone.',
+  'simplify': 'Simplify this text to be easily understood by a general audience.',
+  'key-points': 'Extract the key points from this text.',
   'custom': null // Will prompt for custom input
 };
+
+// Define actions with their prompts for screenshots
+const screenshotActions = {
+  'fix-grammar': 'Analyze the screenshot and fix any grammar or spelling mistakes in the visible text.',
+  'make-concise': 'Analyze the screenshot and provide a concise version of the content shown.',
+  'professional': 'Analyze the screenshot and suggest how to make the content more professional.',
+  'summarize': 'Analyze the screenshot and create a clear summary of what is shown.',
+  'explain': 'Analyze the screenshot and explain what is shown in simple terms.',
+  'translate': 'Analyze the screenshot and translate any visible text to [target language].',
+  'expand': 'Analyze the screenshot and provide more detail about what is shown.',
+  'simplify': 'Analyze the screenshot and simplify the content for a general audience.',
+  'key-points': 'Analyze the screenshot and extract the key points from what is shown.',
+  'custom': null // Will prompt for custom input
+};
+
+// Get the appropriate actions based on content type
+function getActions() {
+  return isScreenshot ? screenshotActions : textActions;
+}
+
+// Listen for content type from main process
+if (window.electronAPI && window.electronAPI.onContentType) {
+  window.electronAPI.onContentType((data) => {
+    isScreenshot = data.isScreenshot;
+    console.log('Content type received:', isScreenshot ? 'screenshot' : 'text');
+  });
+}
 
 // Handle action button clicks
 actionButtons.forEach(button => {
@@ -26,6 +54,7 @@ actionButtons.forEach(button => {
       window.electronAPI.sendAction('custom', null);
     } else {
       // Send the action and its prompt to main process
+      const actions = getActions();
       const prompt = actions[action];
       window.electronAPI.sendAction(action, prompt);
     }

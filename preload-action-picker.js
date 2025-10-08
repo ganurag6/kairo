@@ -6,5 +6,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   closeActionPicker: () => {
     ipcRenderer.invoke('close-action-picker');
+  },
+  onContentType: (callback) => {
+    ipcRenderer.on('content-type', (event, data) => callback(data));
   }
 });

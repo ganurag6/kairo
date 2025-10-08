@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(base64:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(rg:*)"
     ],
     "deny": []
   }

@@ -163,11 +163,7 @@ class TextDetector {
         return this.getFallbackSuggestions();
       }
       
-      const prompt = `Analyze this text and suggest 4 specific, actionable tasks I could perform on it. Each suggestion should be:
-1. Specific to the content and context
-2. Practically useful for improving or working with this text
-3. Different from each other
-4. Concise (2-4 words max)
+      const prompt = `Analyze this text and suggest 4 specific, actionable tasks I could perform on it. Each suggestion should be specific to the content and context, practically useful for improving or working with this text, different from each other, and concise (2-4 words max).
 
 Text to analyze: "${text}"
 
@@ -188,7 +184,7 @@ Choose appropriate icons from: 🔍📝✍️💡🎯📊🔧⚡📋🌟💬🎨
           'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
+          model: 'gpt-4o-mini',
           messages: [
             {
               role: 'system',

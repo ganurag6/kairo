@@ -22,8 +22,8 @@ class KairoApp {
       
       this.conversation = [];
       this.currentText = '';
+      this.currentScreenshot = null;
       this.isProcessing = false;
-      this.isAnalysisRequest = false;
       
       console.log('🔧 Initializing elements...');
       this.initializeElements();
@@ -59,9 +59,7 @@ class KairoApp {
     this.minimizeBtn = document.getElementById('minimize-btn');
     this.clearBtn = document.getElementById('clear-btn');
     
-    // Selected text elements
-    this.selectedTextDisplay = document.getElementById('selected-text-display');
-    this.analyzeBtn = document.getElementById('analyze-btn');
+    // Selected text elements (removed - now goes directly to chat)
     
     // Smart suggestions
     this.smartSuggestions = document.getElementById('smart-suggestions');
@@ -165,90 +163,21 @@ class KairoApp {
       console.error('❌ electronAPI.onCapturedText not found!');
     }
     
+    // Listen for captured screenshots
+    if (window.electronAPI && window.electronAPI.onCapturedScreenshot) {
+      window.electronAPI.onCapturedScreenshot((data) => this.handleCapturedScreenshot(data));
+      console.log('✅ Captured screenshot listener added');
+    } else {
+      console.error('❌ electronAPI.onCapturedScreenshot not found!');
+    }
+    
     // Listen for suggestion clicks from action picker
     if (window.electronAPI && window.electronAPI.onSuggestionClicked) {
       window.electronAPI.onSuggestionClicked((suggestion) => this.handleSuggestionFromActionPicker(suggestion));
       console.log('✅ Suggestion clicked listener added');
     }
     
-    // Listen for manual text input in textarea
-    if (this.selectedTextDisplay) {
-      // Input event listener - only enable/disable analyze button
-      this.selectedTextDisplay.addEventListener('input', () => {
-        console.log('📝 Manual text input detected');
-        const text = this.selectedTextDisplay.value;
-        
-        // Just enable/disable analyze button - no suggestions
-        if (this.analyzeBtn) {
-          this.analyzeBtn.disabled = !text.trim();
-        }
-        
-        // Update current text for analyze button to use
-        this.currentText = text;
-        
-        // Auto-resize the textarea
-        this.autoResizeTextArea();
-        
-        // Enable chat if not already enabled
-        if (this.chatInput && this.chatInput.disabled) {
-          this.chatInput.disabled = false;
-        }
-        if (this.sendBtn && this.sendBtn.disabled) {
-          this.sendBtn.disabled = false;
-        }
-      });
-      
-      // Add Enter key handler for analyze
-      this.selectedTextDisplay.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          const text = this.selectedTextDisplay.value.trim();
-          if (text && this.analyzeBtn && !this.analyzeBtn.disabled) {
-            console.log('🚀 Enter pressed in textarea, triggering analyze');
-            this.analyzeBtn.click();
-          }
-        }
-      });
-      console.log('✅ Textarea enter key listener added');
-    }
-    
-    // Analyze button click
-    if (this.analyzeBtn) {
-      this.analyzeBtn.addEventListener('click', () => {
-        console.log('🔍 Analyze button clicked');
-        const text = this.selectedTextDisplay.value;
-        console.log('📝 Text to analyze:', text);
-        
-        if (text.trim()) {
-          // Clear any previous conversations when analyzing new text
-          this.conversation = [];
-          this.clearChatMessages();
-          
-          // Set the current text
-          this.currentText = text;
-          
-          // Show user message - just the text they entered
-          this.addMessage('user', text);
-          
-          // Generate smart suggestions for later use
-          this.generateSmartSuggestions(text);
-          
-          // Enable chat input
-          this.chatInput.disabled = false;
-          this.sendBtn.disabled = false;
-          
-          // Send the exact text to ChatGPT
-          this.processMessage(text);
-          
-          // Hide suggestions after analyze
-          this.hideSuggestions();
-        }
-      });
-      console.log('✅ Analyze button listener added');
-      
-      // Initially disable the button if no text
-      this.analyzeBtn.disabled = !this.selectedTextDisplay.value.trim();
-    }
+    // Manual text input now handled directly in chat input - no intermediate textarea
     
     console.log('✅ Event listeners setup complete');
   }
@@ -280,33 +209,92 @@ class KairoApp {
     this.currentText = text;
     this.conversation = []; // Reset conversation for new text
     
-    // Display the full selected text in textarea
-    this.selectedTextDisplay.value = text;
-    
-    // Auto-resize the textarea based on content
-    this.autoResizeTextArea();
-    
-    // Clear chat and show welcome for new text
+    // Clear chat and start new conversation
     this.clearChatMessages();
-    this.addMessage('system', `Ready to analyze your text (${text.length} characters)`);
     
-    // Generate smart suggestions
+    // Text captured, ready for action selection
+    
+    // Generate smart suggestions (user will select action)
     this.generateSmartSuggestions(text);
     
-    // Enable chat input
+    // Enable chat input for follow-up
     this.chatInput.disabled = false;
     this.sendBtn.disabled = false;
     this.chatInput.focus();
+    
+    // Don't auto-analyze - wait for user to select an action or type in chat
+  }
+  
+  handleCapturedScreenshot(data) {
+    console.log('📸 New screenshot captured:', data);
+    
+    // Handle both old format (direct vision analysis) and new format (from action picker)
+    if (data.image && data.action) {
+      // New format: from action picker
+      console.log('📸 Screenshot from action picker with action:', data.action);
+      console.log('📸 Screenshot base64 length:', data.image.base64?.length);
+      
+      this.currentScreenshot = data.image.base64;
+      this.currentText = `Screenshot captured (${data.image.size.width}x${data.image.size.height})`;
+      this.conversation = []; // Reset conversation for new screenshot
+      
+      // Clear chat and start new conversation
+      this.clearChatMessages();
+      
+      // Show system message with screenshot (no analysis yet)
+      this.addScreenshotMessage(data.image.base64, `Screenshot ready for: ${data.action}`);
+      
+      // Auto-trigger the selected action
+      setTimeout(() => {
+        this.handleSuggestionFromActionPicker({
+          text: data.action,
+          prompt: data.prompt
+        });
+      }, 100);
+      
+    } else {
+      // Old format: direct vision analysis (fallback)
+      console.log('📸 Screenshot base64 length:', data.base64Image?.length);
+      console.log('📸 Analysis result:', data.analysisResult?.substring(0, 100));
+      
+      this.currentScreenshot = data.base64Image;
+      this.currentText = data.analysisResult; // Use analysis as current text for context
+      this.conversation = []; // Reset conversation for new screenshot
+      
+      // Clear chat and start new conversation
+      this.clearChatMessages();
+      
+      // Show system message with screenshot
+      this.addScreenshotMessage(data.base64Image, data.analysisResult);
+      
+      console.log('📸 About to generate smart suggestions...');
+      // Generate smart suggestions (user will select action)
+      this.generateSmartSuggestions(data.analysisResult);
+    }
+    
+    // Enable chat input for follow-up
+    this.chatInput.disabled = false;
+    this.sendBtn.disabled = false;
+    this.chatInput.focus();
+    
+    console.log('📸 Screenshot handling complete');
   }
   
   handleSuggestionFromActionPicker(suggestion) {
     console.log('🎯 Suggestion clicked from action picker:', suggestion);
     
-    // Show the action as a user message
-    this.addMessage('user', suggestion.text);
+    // Check if we have a screenshot or text
+    if (this.currentScreenshot) {
+      // For screenshots, show the action selection message
+      const combinedMessage = `Screenshot - ${suggestion.text}`;
+      this.addMessage('user', combinedMessage);
+    } else {
+      // For text, combine the captured text and action into single message with hyphen
+      const combinedMessage = `${this.currentText} - ${suggestion.text}`;
+      this.addMessage('user', combinedMessage);
+    }
     
-    // Mark this as an analysis request and process it
-    this.isAnalysisRequest = true;
+    // Process the action directly
     this.processMessage(suggestion.prompt);
     
     // Hide suggestions after selection
@@ -315,6 +303,8 @@ class KairoApp {
   
   async generateSmartSuggestions(text) {
     console.log('🎯 Generating smart suggestions for text:', text.substring(0, 100) + '...');
+    console.log('🎯 Smart suggestions element exists:', !!this.smartSuggestions);
+    console.log('🎯 Default suggestions container exists:', !!this.defaultSuggestionsContainer);
     
     // First, show default suggestions immediately
     this.showDefaultSuggestions();
@@ -323,12 +313,20 @@ class KairoApp {
     this.generateAISuggestions(text);
     
     // Show suggestions section
-    this.smartSuggestions.style.display = 'block';
+    if (this.smartSuggestions) {
+      this.smartSuggestions.style.display = 'block';
+      console.log('🎯 Smart suggestions section shown');
+    } else {
+      console.error('❌ Smart suggestions element not found!');
+    }
     
     // Show AI Actions section
     const aiActionsSection = document.getElementById('ai-actions');
     if (aiActionsSection) {
       aiActionsSection.style.display = 'block';
+      console.log('🎯 AI actions section shown');
+    } else {
+      console.error('❌ AI actions section not found!');
     }
   }
   
@@ -419,9 +417,19 @@ class KairoApp {
   
   sendSuggestionMessage(suggestion) {
     console.log('🎯 Sending suggestion message:', suggestion);
-    this.addMessage('user', suggestion.text);
-    // Mark this as an analysis request
-    this.isAnalysisRequest = true;
+    
+    // Check if we have a screenshot or text
+    if (this.currentScreenshot) {
+      // For screenshots, show the action selection message
+      const combinedMessage = `Screenshot - ${suggestion.text}`;
+      this.addMessage('user', combinedMessage);
+    } else {
+      // For text, combine the captured text and action into single message with hyphen
+      const combinedMessage = `${this.currentText} - ${suggestion.text}`;
+      this.addMessage('user', combinedMessage);
+    }
+    
+    // Process the action directly
     this.processMessage(suggestion.prompt);
     
     // Hide suggestions after selection
@@ -487,7 +495,7 @@ class KairoApp {
       }
       
       const requestBody = {
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4o-mini',
         messages: this.buildConversationHistory(fullPrompt),
         temperature: 0.7,
         max_tokens: 1000
@@ -538,23 +546,25 @@ class KairoApp {
   }
   
   buildContextualPrompt(userPrompt) {
-    // Only add context if this is specifically an analysis request from suggestions
-    if (this.isAnalysisRequest) {
-      this.isAnalysisRequest = false; // Reset the flag
-      return `You are analyzing this text: "${this.currentText}"\n\nUser request: ${userPrompt}`;
-    }
-    
-    // For ALL other cases (typed messages, analyze button, etc.), send directly
+    // Send prompt directly - context is already in the system message
     return userPrompt;
   }
   
   buildConversationHistory(currentPrompt) {
-    const messages = [
-      {
+    const messages = [];
+    
+    // Build system message based on whether we have a screenshot or text
+    if (this.currentScreenshot) {
+      messages.push({
+        role: 'system',
+        content: 'You are Kairo, an intelligent AI assistant that acts at the perfect moment. You help users analyze, improve, and understand content from screenshots. Always provide helpful, accurate, and concise responses. The user has provided a screenshot for you to analyze.'
+      });
+    } else {
+      messages.push({
         role: 'system',
         content: `You are Kairo, an intelligent AI assistant that acts at the perfect moment. You help users analyze, improve, and understand text. Always provide helpful, accurate, and concise responses. The user has selected this text to analyze: "${this.currentText}"`
-      }
-    ];
+      });
+    }
     
     // Add conversation history
     this.conversation.forEach(msg => {
@@ -564,11 +574,29 @@ class KairoApp {
       });
     });
     
-    // Add current prompt
-    messages.push({
-      role: 'user',
-      content: currentPrompt
-    });
+    // Add current prompt with screenshot if available
+    if (this.currentScreenshot) {
+      messages.push({
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: currentPrompt
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:image/png;base64,${this.currentScreenshot}`
+            }
+          }
+        ]
+      });
+    } else {
+      messages.push({
+        role: 'user',
+        content: currentPrompt
+      });
+    }
     
     return messages;
   }
@@ -618,6 +646,36 @@ class KairoApp {
     this.scrollToBottom();
     
     console.log(`✅ Message added to chat`);
+  }
+  
+  addScreenshotMessage(base64Image, analysisText) {
+    console.log('📸 Adding screenshot message to chat');
+    
+    if (!this.chatMessages) {
+      console.error('❌ chatMessages element not found! Cannot add screenshot message.');
+      return;
+    }
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message user screenshot-message';
+    
+    messageDiv.innerHTML = `
+      <div class="screenshot-container">
+        <img src="data:image/png;base64,${base64Image}" 
+             alt="Captured Screenshot" 
+             class="screenshot-image"
+             onclick="this.classList.toggle('enlarged')" />
+        <div class="screenshot-analysis">
+          <strong>📸 Screenshot Analysis:</strong>
+          <div class="analysis-text">${analysisText}</div>
+        </div>
+      </div>
+    `;
+    
+    this.chatMessages.appendChild(messageDiv);
+    this.scrollToBottom();
+    
+    console.log('✅ Screenshot message added to chat');
   }
   
   showTypingIndicator() {
@@ -706,33 +764,18 @@ class KairoApp {
   }
   
   autoResizeTextArea() {
-    if (!this.selectedTextDisplay) return;
-    
-    // Reset height to auto to get accurate scrollHeight
-    this.selectedTextDisplay.style.height = 'auto';
-    
-    // Calculate the desired height based on content
-    let desiredHeight = this.selectedTextDisplay.scrollHeight;
-    
-    // Set min and max constraints
-    const minHeight = 80; // Minimum height in pixels
-    const maxHeight = 250; // Maximum height in pixels (increased from CSS 150px for very long texts)
-    
-    // Apply the calculated height with constraints
-    const finalHeight = Math.max(minHeight, Math.min(desiredHeight, maxHeight));
-    this.selectedTextDisplay.style.height = finalHeight + 'px';
-    
-    console.log(`📐 Text area resized: content=${desiredHeight}px, final=${finalHeight}px`);
+    // No longer needed - textarea removed
+    return;
   }
   
   disableInput() {
-    this.chatInput.disabled = true;
-    this.sendBtn.disabled = true;
+    if (this.chatInput) this.chatInput.disabled = true;
+    if (this.sendBtn) this.sendBtn.disabled = true;
   }
   
   enableInput() {
-    this.chatInput.disabled = false;
-    this.sendBtn.disabled = false;
+    if (this.chatInput) this.chatInput.disabled = false;
+    if (this.sendBtn) this.sendBtn.disabled = false;
     this.chatInput.focus();
   }
   

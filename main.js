@@ -6,6 +6,8 @@ let overlayWindow = null;
 let actionPickerWindow = null;
 let responseWindow = null;
 let currentSelectedText = '';
+let currentScreenshot = null;
+let storedMousePosition = null;
 
 function createTray() {
   try {
@@ -211,31 +213,52 @@ function showActionPicker() {
 function showActionPickerAtMousePosition() {
   const { screen, BrowserWindow } = require('electron');
   
-  // Get all displays
-  const displays = screen.getAllDisplays();
+  // Use stored mouse position if available, otherwise get current position
+  const mousePos = storedMousePosition || screen.getCursorScreenPoint();
+  console.log('Using mouse position:', mousePos);
+  console.log('Was stored:', !!storedMousePosition);
   
-  // Try to find the active window's display
-  let activeDisplay = screen.getPrimaryDisplay();
+  // Get the display where the mouse is
+  const activeDisplay = screen.getDisplayNearestPoint(mousePos);
   
-  // Get the display where the mouse currently is (as a proxy for where the user is working)
-  const focusedWindow = BrowserWindow.getFocusedWindow();
-  if (focusedWindow) {
-    const bounds = focusedWindow.getBounds();
-    const centerX = bounds.x + bounds.width / 2;
-    const centerY = bounds.y + bounds.height / 2;
-    activeDisplay = screen.getDisplayNearestPoint({ x: centerX, y: centerY });
-  }
-  
-  // Position the action picker in the center of the active display
+  // Action picker window dimensions
   const windowWidth = 540;
   const windowHeight = 120;
-  const x = Math.round(activeDisplay.bounds.x + (activeDisplay.bounds.width - windowWidth) / 2);
-  const y = Math.round(activeDisplay.bounds.y + (activeDisplay.bounds.height - windowHeight) / 2);
+  
+  // Calculate position to center the window at mouse cursor
+  let x = mousePos.x - Math.floor(windowWidth / 2);
+  let y = mousePos.y - Math.floor(windowHeight / 2);
+  
+  // Ensure the window stays within display bounds
+  const displayBounds = activeDisplay.bounds;
+  
+  // Adjust X position if needed
+  if (x < displayBounds.x) {
+    x = displayBounds.x;
+  } else if (x + windowWidth > displayBounds.x + displayBounds.width) {
+    x = displayBounds.x + displayBounds.width - windowWidth;
+  }
+  
+  // Adjust Y position if needed
+  if (y < displayBounds.y) {
+    y = displayBounds.y;
+  } else if (y + windowHeight > displayBounds.y + displayBounds.height) {
+    y = displayBounds.y + displayBounds.height - windowHeight;
+  }
   
   if (actionPickerWindow) {
     actionPickerWindow.setPosition(x, y);
     actionPickerWindow.show();
     actionPickerWindow.focus();
+    
+    // Tell action picker if we're dealing with a screenshot
+    setTimeout(() => {
+      const isScreenshot = !!currentScreenshot;
+      actionPickerWindow.webContents.send('content-type', { isScreenshot });
+    }, 100);
+    
+    // Clear stored mouse position after use
+    storedMousePosition = null;
   }
 }
 
@@ -337,6 +360,97 @@ async function showOverlay() {
   }
 }
 
+// Simple screenshot capture functionality
+let screenshotCancelled = false;
+
+async function startScreenshotCapture() {
+  console.log('🖼️ Starting simple screenshot capture...');
+  screenshotCancelled = false;
+  
+  try {
+    if (process.platform === 'darwin') {
+      // macOS: Use built-in screenshot utility
+      const { exec } = require('child_process');
+      
+      // Use screencapture with interactive selection
+      exec('screencapture -i -c', (error, stdout, stderr) => {
+        if (error) {
+          console.log('📸 Screenshot capture cancelled by user (ESC pressed)');
+          screenshotCancelled = true;
+          // Don't show error or open app when user cancels with ESC
+          return;
+        }
+        
+        console.log('✅ Screenshot captured to clipboard');
+        
+        // Get the image from clipboard and process it
+        setTimeout(() => {
+          if (!screenshotCancelled) {
+            processClipboardImage();
+          }
+        }, 500);
+      });
+      
+    } else {
+      // Windows/Linux: Show message for now
+      showScreenshotError('Screenshot capture coming soon for your platform. For now, please use a screenshot tool and paste the image.');
+    }
+    
+  } catch (error) {
+    console.error('❌ Screenshot capture failed:', error);
+    showScreenshotError('Screenshot capture failed. Please try again.');
+  }
+}
+
+function showScreenshotError(message) {
+  if (!overlayWindow) {
+    createOverlayWindow();
+  }
+  overlayWindow.show();
+  overlayWindow.webContents.send('captured-text', message);
+}
+
+async function processClipboardImage() {
+  console.log('📸 Processing clipboard image...');
+  
+  try {
+    // Check if screenshot was cancelled
+    if (screenshotCancelled) {
+      console.log('📸 Screenshot was cancelled, skipping clipboard processing');
+      return;
+    }
+    
+    // Check if clipboard has image
+    const { clipboard, nativeImage } = require('electron');
+    const image = clipboard.readImage();
+    
+    if (image.isEmpty()) {
+      console.log('📋 No image in clipboard');
+      // Don't show error if screenshot was cancelled
+      if (!screenshotCancelled) {
+        showScreenshotError('No image found in clipboard. Please try the screenshot again.');
+      }
+      return;
+    }
+    
+    console.log('🖼️ Image found in clipboard:', image.getSize());
+    
+    // Convert to base64 and store the screenshot
+    const base64Image = image.toPNG().toString('base64');
+    currentScreenshot = {
+      base64: base64Image,
+      size: image.getSize()
+    };
+    
+    // Show action picker for screenshot (same as text selection)
+    showActionPickerAtMousePosition();
+    
+  } catch (error) {
+    console.error('❌ Clipboard image processing failed:', error);
+    showScreenshotError(`Image processing failed: ${error.message}`);
+  }
+}
+
 app.whenReady().then(() => {
   console.log('App is ready!');
   
@@ -388,6 +502,10 @@ app.whenReady().then(() => {
   setTimeout(() => {
     const ret = globalShortcut.register('CommandOrControl+K', () => {
       console.log('Cmd/Ctrl+K pressed!');
+      // Store mouse position when shortcut is pressed
+      const { screen } = require('electron');
+      storedMousePosition = screen.getCursorScreenPoint();
+      console.log('Stored mouse position:', storedMousePosition);
       showActionPicker();
     });
     
@@ -397,14 +515,18 @@ app.whenReady().then(() => {
       console.log('Shortcut registered successfully: Cmd/Ctrl+K');
     }
     
-    // Also register an alternative shortcut just in case
-    const altRet = globalShortcut.register('CommandOrControl+Shift+K', () => {
-      console.log('Cmd/Ctrl+Shift+K pressed!');
-      showOverlay();
+    // Register screenshot capture shortcut
+    const screenshotRet = globalShortcut.register('CommandOrControl+Shift+K', () => {
+      console.log('Cmd/Ctrl+Shift+K pressed - Starting screenshot capture!');
+      // Store mouse position when shortcut is pressed
+      const { screen } = require('electron');
+      storedMousePosition = screen.getCursorScreenPoint();
+      console.log('Stored mouse position for screenshot:', storedMousePosition);
+      startScreenshotCapture();
     });
     
-    if (altRet) {
-      console.log('Alternative shortcut registered: Cmd/Ctrl+Shift+K');
+    if (screenshotRet) {
+      console.log('Screenshot capture shortcut registered: Cmd/Ctrl+Shift+K');
     }
   }, 1000);
 });
@@ -480,9 +602,10 @@ ipcMain.handle('action-selected', async (event, { action, prompt }) => {
   overlayWindow.show();
   overlayWindow.focus();
   
-  // Send the selected text and action to the main chat window
+  // Send the selected text or screenshot and action to the main chat window
   setTimeout(() => {
     if (currentSelectedText && currentSelectedText.trim() !== '') {
+      // Handle text selection
       overlayWindow.webContents.send('captured-text', currentSelectedText);
       
       // After a brief delay, send the action as a suggestion click
@@ -492,7 +615,18 @@ ipcMain.handle('action-selected', async (event, { action, prompt }) => {
           prompt: prompt
         });
       }, 200);
+    } else if (currentScreenshot) {
+      // Handle screenshot
+      overlayWindow.webContents.send('captured-screenshot', {
+        image: currentScreenshot,
+        action: action,
+        prompt: prompt
+      });
     }
+    
+    // Clear the current data after processing
+    currentSelectedText = '';
+    currentScreenshot = null;
   }, 100);
 });
 
@@ -570,7 +704,7 @@ async function callOpenAI(prompt, apiKey) {
   
   try {
     const requestBody = {
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
@@ -605,5 +739,85 @@ async function callOpenAI(prompt, apiKey) {
   } catch (error) {
     console.error('OpenAI API error:', error);
     return `Error: ${error.message}`;
+  }
+}
+
+
+// Analyze screenshot with GPT-4o-mini Vision API
+async function analyzeScreenshotWithVision(base64Image) {
+  console.log('🤖 Analyzing screenshot with Vision API...');
+  
+  try {
+    const apiKey = decryptApiKey();
+    if (!apiKey) {
+      throw new Error('API key not found');
+    }
+    
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'Analyze this screenshot and extract all visible text. Also describe what you see in the image and suggest any improvements or actions that could be taken. Be detailed and helpful.'
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:image/png;base64,${base64Image}`
+                }
+              }
+            ]
+          }
+        ],
+        max_tokens: 1000,
+        temperature: 0.7
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`Vision API failed: ${response.status} - ${errorData.error?.message || response.statusText}`);
+    }
+    
+    const data = await response.json();
+    const analysisResult = data.choices[0].message.content;
+    
+    console.log('✅ Vision analysis complete:', analysisResult.substring(0, 100) + '...');
+    
+    // Show the screenshot capture with suggestions (similar to text capture)
+    if (!overlayWindow) {
+      createOverlayWindow();
+    }
+    
+    overlayWindow.center();
+    overlayWindow.show();
+    overlayWindow.focus();
+    
+    // Send the screenshot data to show with suggestions
+    setTimeout(() => {
+      overlayWindow.webContents.send('captured-screenshot', {
+        base64Image: base64Image,
+        analysisResult: analysisResult
+      });
+    }, 200);
+    
+  } catch (error) {
+    console.error('❌ Vision API analysis failed:', error);
+    
+    // Fallback: show error message
+    if (!overlayWindow) {
+      createOverlayWindow();
+    }
+    overlayWindow.show();
+    overlayWindow.webContents.send('captured-text', `Screenshot captured, but analysis failed: ${error.message}\n\nYou can still paste the screenshot directly into the chat.`);
   }
 }
