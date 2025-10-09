@@ -1,221 +1,438 @@
-# Kairo App - Complete Technical Overview
+# Kairo App - Complete Technical Documentation
 
 ## App Summary
-Kairo is an Electron-based AI assistant that provides global text capture and processing. Users can select text anywhere on screen, press Cmd+K/Ctrl+K, and get AI-powered analysis, suggestions, and improvements through OpenAI's GPT-3.5-turbo.
+Kairo is an advanced Electron-based AI assistant that provides global text capture and screenshot analysis. Users can select text anywhere on screen, press Cmd+Option+K/Ctrl+Alt+K, or capture screenshots with Cmd+Option+S/Ctrl+Alt+S, and get AI-powered analysis, suggestions, and improvements through OpenAI's GPT-4o-mini.
 
-## Core Architecture
+## 🏗️ Core Architecture
 
 ### Multi-Window System
-- **Main Overlay Window** (`index.html`): Primary chat interface with smart suggestions
-- **Action Picker Window** (`action-picker.html`): Quick action buttons for captured text
-- **Response Window** (`response-window.html`): *Currently unused after workflow change*
+- **Main Overlay Window** (`index.html`): Primary chat interface with AI conversation
+- **Action Picker Window** (`action-picker.html`): Quick action buttons for captured content
+- **Response Window** (`response-window.html`): *Legacy - unused after workflow unification*
 - **System Integration**: Tray icon, global shortcuts, clipboard management
 
-### Key Files
-- `main.js`: Electron main process, window management, IPC handlers
-- `renderer.js`: Main chat interface logic and AI integration
-- `textDetector.js`: Smart text analysis and contextual suggestion generation
-- `action-picker.js`: Quick action button handlers
-- `preload.js`: Secure bridge between main and renderer processes
-
-## Complete Workflow
-
-### 1. App Launch & Setup
-```
-Electron starts → Creates 3 windows (hidden) → Registers global shortcuts → System tray integration
+### Global State Variables
+```javascript
+let tray = null;                    // System tray instance
+let overlayWindow = null;           // Main chat window
+let actionPickerWindow = null;      // Action selection window
+let responseWindow = null;          // Legacy response window
+let currentSelectedText = '';       // Currently captured text
+let currentScreenshot = null;       // Currently captured screenshot (base64)
+let storedMousePosition = null;     // Mouse position when shortcut pressed
+let screenshotCancelled = false;    // Screenshot cancellation flag
 ```
 
-### 2. Text Capture Methods
+## ⌨️ Global Shortcuts (Updated)
 
-**Method A: Global Text Selection (Primary Flow)**
-```
-User selects text anywhere → Presses Cmd+K/Ctrl+K → App copies to clipboard → Shows action picker
+### Current Shortcuts
+- **Text Selection**: `Cmd+Option+P` (macOS) / `Ctrl+Alt+P` (Windows/Linux)
+- **Screenshot Capture**: `Cmd+Option+S` (macOS) / `Ctrl+Alt+S` (Windows/Linux)
+
+### Shortcut Registration Logic
+```javascript
+// main.js:503-530
+const ret = globalShortcut.register('CommandOrControl+Option+P', () => {
+  const { screen } = require('electron');
+  storedMousePosition = screen.getCursorScreenPoint(); // Store position immediately
+  showActionPicker();
+});
 ```
 
-**Method B: Direct Input**
+## 🔄 Complete Application Workflows
+
+### 1. Text Selection Workflow
 ```
-User opens main window → Types/pastes text → Shows chat interface with smart suggestions
+User selects text → Presses Cmd+Option+P → stores mouse position → copies text to clipboard 
+→ shows action picker at stored position → user selects action → opens main chat window 
+→ sends text + action to renderer → processes with OpenAI API → displays response
 ```
 
-### 3. Updated Workflow (After Recent Changes)
+**Detailed Flow:**
+1. `main.js:503` - Global shortcut triggered
+2. `main.js:216` - Store mouse cursor position
+3. `main.js:182` - Execute clipboard copy (platform-specific)
+4. `main.js:186` - Process and preserve text formatting
+5. `main.js:208` - Show action picker at stored mouse position
+6. `action-picker.js:57` - User selects action
+7. `main.js:575-600` - IPC handler processes selection
+8. `renderer.js:283-302` - Handle suggestion from action picker
+9. `renderer.js:467-546` - Process message with OpenAI API
+
+### 2. Screenshot Workflow (Updated)
 ```
-Select text → Cmd+K → Action picker (10 buttons) → Click action → Full chat window opens → Continue conversation
+User presses Cmd+Option+S → stores mouse position → native screenshot tool → image to clipboard 
+→ process base64 image → show action picker → user selects action → main chat window 
+→ sends screenshot + action → Vision API analysis → displays response
 ```
 
-**Key Change**: Actions now open the main chat window instead of a separate response window, enabling seamless conversation flow.
+**Detailed Flow:**
+1. `main.js:519` - Screenshot shortcut triggered
+2. `main.js:519` - Store mouse cursor position
+3. `main.js:353` - Execute native screenshot (`screencapture -i -c` on macOS)
+4. `main.js:416-424` - Process clipboard image, convert to base64
+5. `main.js:424` - Show action picker at stored position
+6. `action-picker.js:57` - User selects screenshot-specific action
+7. `main.js:588-595` - Send screenshot + action to renderer
+8. `renderer.js:232-253` - Handle screenshot with action
+9. `renderer.js:578-599` - Build Vision API message with image
 
-## Smart Text Detection System
+## 🧠 Smart Text Detection System
 
-### Text Type Detection (`textDetector.js`)
+### Text Type Classification (`textDetector.js`)
 The app analyzes text and detects 7 different types with confidence scores:
 
-1. **Email**: Keywords like "dear", "regards", "@", "subject:"
-2. **Code**: Keywords like "function", "const", "import", "{}", "()"
-3. **Academic**: Keywords like "therefore", "hypothesis", "research"
-4. **Social**: Keywords like "#", "@", emojis, "lol", "check out"
-5. **Business**: Keywords like "pursuant", "agreement", "stakeholder"
-6. **Creative**: Keywords like "chapter", "character", "dialogue"
-7. **Data**: Keywords like "•", "1.", "total", "percentage"
-
-### Context-Aware Suggestions
-Each text type gets specific AI-generated suggestions:
-- **Email**: "Make more formal", "Add call-to-action"
-- **Code**: "Explain code", "Find bugs", "Optimize"
-- **Academic**: "Strengthen argument", "Add evidence"
-
-## AI Integration Points
-
-### 1. Action Picker Quick Actions
 ```javascript
-// 10 preset actions in action-picker.html
-Fix Grammar, Make Concise, Professional, Summarize, Explain, 
-Translate, Expand, Simplify, Key Points, Custom
+const textTypes = {
+  email: ['dear', 'regards', '@', 'subject:', 'sincerely'],
+  code: ['function', 'const', 'import', '{}', '()', 'class'],
+  academic: ['therefore', 'hypothesis', 'research', 'study'],
+  social: ['#', '@', '😀', 'lol', 'check out'],
+  business: ['pursuant', 'agreement', 'stakeholder', 'revenue'],
+  creative: ['chapter', 'character', 'dialogue', 'story'],
+  data: ['•', '1.', 'total', 'percentage', 'analysis']
+};
 ```
 
-### 2. Smart Suggestions (Two Types)
+### Context-Aware Action Prompts
+Each content type gets specific prompts in `action-picker.js`:
+
+**Text Actions:**
 ```javascript
-// Default suggestions - shown immediately
-Fix Grammar, Make Concise, Professional Rewrite, Summarize, Explain Simply
-
-// AI-generated suggestions - created dynamically based on text type
-Generated via OpenAI API call analyzing text context
+const textActions = {
+  'fix-grammar': 'Fix all grammar and spelling mistakes in this text.',
+  'summarize': 'Create a clear, concise summary of this text.',
+  'explain': 'Explain this text in simple terms that anyone can understand.'
+  // ... more actions
+};
 ```
 
-### 3. Chat Interface
+**Screenshot Actions:**
 ```javascript
-// Full conversational AI with:
-- Conversation history maintenance
-- Context-aware responses
-- Copy-to-clipboard functionality
-- System/user/assistant message types
+const screenshotActions = {
+  'fix-grammar': 'Analyze the screenshot and fix any grammar or spelling mistakes in the visible text.',
+  'summarize': 'Analyze the screenshot and create a clear summary of what is shown.',
+  'explain': 'Analyze the screenshot and explain what is shown in simple terms.'
+  // ... more actions
+};
 ```
 
-## API Integration
+## 🔌 IPC Communication Architecture
 
-### OpenAI Configuration
-- **Model**: GPT-3.5-turbo
-- **API Key**: Base64 encoded and stored in main.js (decryptApiKey function)
-- **Temperature**: 0.7 for chat, 0.3 for quick actions
-- **Max Tokens**: 1000 for chat, 500 for suggestions
+### Main Process → Renderer
+- `captured-text` - Send selected text to chat window
+- `captured-screenshot` - Send screenshot data with action
+- `suggestion-clicked` - Action picker selection result
 
-### API Call Locations
-1. **Quick Actions**: `main.js:505` - Direct prompt processing
-2. **Smart Suggestions**: `textDetector.js:184` - Context analysis
-3. **Chat Interface**: `renderer.js:482` - Conversation management
+### Renderer → Main Process
+- `action-selected` - Action picker button clicked
+- `close-action-picker` - Close action picker window
+- `get-api-key` - Retrieve OpenAI API key
 
-## Event Flow & IPC Communication
+### Action Picker → Main Process
+- `action-selected` - Forward action selection
+- `close-action-picker` - Close picker window
 
-### Text Capture Flow
-```
-main.js:showActionPicker() → clipboard copy → showActionPickerAtMousePosition()
-```
+### Content Type Detection
+- `content-type` - Tell action picker if content is text or screenshot
 
-### Action Selection Flow
-```
-action-picker.js → IPC 'action-selected' → main.js handler → main chat window
-```
+## 🖼️ Window Management & Positioning
 
-### Chat Flow
-```
-renderer.js:sendMessage() → processMessage() → OpenAI API → addMessage()
-```
-
-## Key Features Implemented
-
-### ✅ Context Awareness
-- Smart text type detection with confidence scoring
-- 7 different text categories with specific suggestions
-- Pattern matching with weighted indicators
-
-### ✅ AI-Powered Suggestions
-- Dynamic suggestion generation via OpenAI
-- Fallback to pattern-based suggestions if AI fails
-- Real-time contextual analysis
-
-### ✅ Unified Workflow
-- Single chat interface for all interactions
-- Seamless transition from quick actions to conversation
-- Full conversation history and context maintenance
-
-### ✅ Global Integration
-- Works from any application via global shortcuts
-- Clipboard integration for text capture
-- System tray and dock integration
-
-### ✅ Privacy & Security
-- Direct OpenAI API calls (no middleman)
-- Local conversation storage
-- No data collection or transmission
-
-## Window Management
-
-### Window States & Positioning
+### Action Picker Positioning Logic
 ```javascript
-// Action Picker: 540x120, transparent, always on top, center screen
-// Main Overlay: 800x700, resizable, always on top, center screen
-// Auto-hide on blur (with DevTools exception)
+// main.js:213-262
+function showActionPickerAtMousePosition() {
+  const mousePos = storedMousePosition || screen.getCursorScreenPoint();
+  
+  // Calculate centered position
+  let x = mousePos.x - Math.floor(windowWidth / 2);
+  let y = mousePos.y - Math.floor(windowHeight / 2);
+  
+  // Bounds checking for multiple displays
+  const displayBounds = activeDisplay.bounds;
+  if (x < displayBounds.x) x = displayBounds.x;
+  if (x + windowWidth > displayBounds.x + displayBounds.width) {
+    x = displayBounds.x + displayBounds.width - windowWidth;
+  }
+  // Similar for Y bounds...
+}
 ```
 
-### Platform-Specific Behavior
-- **macOS**: Dock integration, osascript for text copying
-- **Windows**: System tray, Ctrl+C simulation
-- **Linux**: Basic tray support, clipboard fallback
+### Window Specifications
+- **Action Picker**: 540x120px, transparent, always on top, no frame
+- **Main Overlay**: 800x700px, resizable, always on top, with frame
+- **Multi-display Support**: Automatic display detection and bounds checking
 
-## Error Handling
+## 🤖 AI Integration
 
-### API Failures
-- Graceful fallback to pattern-based suggestions
-- Error messages displayed in chat interface
-- Retry mechanisms for network issues
+### OpenAI API Configuration
+```javascript
+model: 'gpt-4o-mini',           // Vision-capable model
+temperature: 0.7,               // Chat responses
+max_tokens: 1000,              // Response length limit
+```
 
-### Text Capture Issues
-- Fallback to existing clipboard content
-- Empty text handling with helpful messages
-- Platform-specific copy command variations
+### API Call Points
+1. **Quick Actions** (`main.js:505`) - Direct prompt processing
+2. **Smart Suggestions** (`textDetector.js:184`) - Context analysis  
+3. **Chat Interface** (`renderer.js:482-546`) - Conversation management
+4. **Vision Analysis** (`renderer.js:578-599`) - Screenshot analysis
 
-## Performance Optimizations
+### Vision API Message Format
+```javascript
+{
+  role: 'user',
+  content: [
+    { type: 'text', text: userPrompt },
+    { 
+      type: 'image_url', 
+      image_url: { url: `data:image/png;base64,${screenshot}` }
+    }
+  ]
+}
+```
+
+## 📁 File Structure & Responsibilities
+
+### Core Files
+```
+├── main.js                 # Electron main process, window management, shortcuts
+├── renderer.js             # Chat UI, AI integration, conversation management
+├── action-picker.js        # Action selection logic with content-aware prompts
+├── textDetector.js         # Smart text analysis and suggestion generation
+├── preload.js              # Main window IPC bridge
+├── preload-action-picker.js # Action picker IPC bridge
+├── index.html              # Main chat interface
+├── action-picker.html      # Action selection interface
+├── styles.css              # Main interface styling
+└── action-picker.css       # Action picker styling
+```
+
+### Preload Scripts
+- **preload.js**: Main window IPC (captured-text, suggestion-clicked)
+- **preload-action-picker.js**: Action picker IPC (action-selected, content-type)
+- **preload-response.js**: Legacy response window
+- **preload-screenshot.js**: Screenshot-specific handlers
+
+## 🛠️ Platform-Specific Implementations
+
+### macOS
+- Native screenshot: `screencapture -i -c`
+- Text copy: `osascript -e 'tell application "System Events" to keystroke "c" using command down'`
+- Dock integration and app icon management
+- Full feature support
+
+### Windows
+- Basic tray support with context menu
+- Ctrl+C simulation for text copy
+- Screenshot: "Coming soon" message
+- Limited but functional
+
+### Linux
+- Basic tray support
+- Standard clipboard operations
+- AppImage distribution
+- Basic functionality
+
+## ⚡ Performance Optimizations
 
 ### Async Operations
-```javascript
-// Non-blocking AI suggestion generation
-// Immediate default suggestions while AI processes
-// Parallel window creation and shortcut registration
-```
+- Non-blocking AI suggestion generation
+- Immediate default suggestions while AI processes
+- Parallel window creation and shortcut registration
 
 ### Memory Management
+- Conversation history cleanup
+- Window hiding instead of destruction
+- Efficient DOM manipulation
+- Screenshot data cleanup after use
+
+### Caching Strategy
+- Base64 API key decoding cache
+- Window position calculations
+- Display bounds caching
+
+## 🔒 Security Measures
+
+### API Key Protection
 ```javascript
-// Conversation history cleanup
-// Window hiding instead of destruction
-// Efficient DOM manipulation
+function decryptApiKey() {
+  const encodedKey = 'c2stcHJvai11Q3...'; // Base64 encoded
+  return Buffer.from(encodedKey, 'base64').toString('utf-8');
+}
 ```
 
-## File Structure Overview
+### Context Bridge Security
+- Isolated renderer processes
+- Controlled IPC exposure via contextBridge
+- No direct Node.js access in renderers
+
+### Content Security
+- No sensitive data logging
+- Secure screenshot handling
+- Memory cleanup of sensitive data
+
+## 🏗️ Build & Deployment
+
+### Build Scripts
+```json
+{
+  "build": "electron-builder",
+  "dist": "electron-builder --publish=never",
+  "dist-mac": "electron-builder --mac",
+  "dist-win": "electron-builder --win",
+  "dist-linux": "electron-builder --linux"
+}
 ```
-├── main.js                 # Electron main process
-├── index.html              # Main chat interface
-├── renderer.js             # Chat logic & AI integration
-├── textDetector.js         # Smart text analysis
-├── action-picker.html      # Quick action buttons
-├── action-picker.js        # Action picker logic
-├── response-window.html    # [Unused after workflow change]
-├── preload.js              # IPC bridge
-├── styles.css              # Main interface styling
-├── action-picker.css       # Action picker styling
-└── package.json            # Electron app configuration
+
+### Distribution Configuration
+- **macOS**: DMG package with productivity category
+- **Windows**: NSIS installer with user directory choice
+- **Linux**: AppImage for universal compatibility
+
+### Build Requirements
+- Icon files in `/build` directory
+- Code signing for macOS distribution
+- Accessibility permissions for global shortcuts
+
+## 🐛 Known Issues & Solutions
+
+### Global Shortcuts Not Working
+**Symptoms**: Shortcuts don't trigger on packaged app
+**Causes**: 
+- Missing accessibility permissions (macOS)
+- Conflicting shortcuts with other apps
+- Code signing issues
+
+**Solutions**:
+1. Grant accessibility permissions in System Settings
+2. Check for shortcut conflicts
+3. Run from terminal to see error messages
+4. Rebuild app with `npm run dist-mac`
+
+### Action Picker Positioning Issues
+**Symptoms**: Action picker appears in wrong location
+**Causes**:
+- Multiple display configurations
+- Mouse position not stored correctly
+- Display bounds calculation errors
+
+**Solutions**:
+- Mouse position now stored when shortcut pressed
+- Bounds checking for all displays
+- Fallback to current cursor position
+
+### Screenshot Feature Problems
+**Symptoms**: Screenshots not captured or processed
+**Causes**:
+- Platform-specific screenshot tools
+- Clipboard access permissions
+- Image processing failures
+
+**Solutions**:
+- Platform detection with appropriate tools
+- Error handling for cancelled screenshots
+- Base64 conversion validation
+
+### Vision API Failures
+**Symptoms**: Screenshot analysis fails or gives wrong results
+**Causes**:
+- API rate limits
+- Invalid image format
+- Network connectivity issues
+
+**Solutions**:
+- Proper error handling and user feedback
+- Image format validation
+- Fallback to text-based analysis
+
+## 📊 Recent Major Changes
+
+### Shortcut Updates (October 2024)
+- **Old**: `Cmd+K` → `Cmd+Option+K` (still conflicted with browser inspector)
+- **New**: `Cmd+Option+P` for text, `Cmd+Option+S` for screenshots
+- **Reason**: Avoid ALL conflicts including browser inspector (Cmd+Option+K)
+
+### Screenshot Workflow Unification
+- **Old**: Direct Vision API analysis
+- **New**: Action picker → choice → analysis
+- **Benefit**: Consistent UX across text and screenshots
+
+### Mouse Position Storage
+- **Problem**: Action picker appeared at terminal/focused window
+- **Solution**: Store cursor position when shortcut pressed
+- **Result**: Action picker appears at selection location
+
+### Vision API Integration
+- **Added**: Screenshot support in renderer conversation
+- **Format**: Multi-part messages with text + image
+- **Model**: GPT-4o-mini for vision capabilities
+
+## 🔍 Debugging & Development
+
+### Console Logging
+Extensive console logging throughout for debugging:
+- Shortcut registration status
+- Mouse position tracking
+- IPC message flow
+- API call details
+- Error conditions
+
+### Development Mode
+```bash
+npm start           # Development with full logging
+npm run dev         # Alternative development command
 ```
 
-## Recent Modifications (Latest Changes)
+### Common Debug Commands
+```bash
+# Check running processes
+ps aux | grep Kairo
 
-### Workflow Unification
-- **Modified**: `main.js:466-497` - Action picker now opens main chat window
-- **Added**: `renderer.js:306-318` - Handler for action picker suggestions
-- **Updated**: `preload.js:7-9` - New IPC event for suggestion clicks
+# Clear app data
+rm -rf ~/Library/Application\ Support/Kairo
 
-### Result
-Users now get a unified experience where quick actions seamlessly transition into full conversational AI interface, eliminating window switching and maintaining conversation context.
+# Check permissions
+sudo spctl --assess --verbose /Applications/Kairo.app
+```
+
+## 📈 Future Improvements
+
+### Planned Features
+- Windows/Linux screenshot support
+- Custom shortcut configuration
+- Multiple AI model support
+- Plugin system for actions
+- Cloud sync for conversations
+
+### Technical Debt
+- Remove legacy response window code
+- Consolidate preload scripts
+- Improve error handling consistency
+- Add comprehensive test suite
 
 ---
 
-*Last Updated: October 1, 2025*
-*Version: 1.1.0*
-*Architecture: Electron + OpenAI GPT-3.5-turbo*
+*Last Updated: October 8, 2024*  
+*Version: 1.1.0*  
+*Architecture: Electron + OpenAI GPT-4o-mini Vision*  
+*Supported Platforms: macOS (full), Windows (partial), Linux (basic)*
+
+## 🎯 Quick Reference
+
+### For Developers
+- Main entry: `main.js`
+- UI logic: `renderer.js`
+- Actions: `action-picker.js`
+- Text analysis: `textDetector.js`
+
+### For Users
+- Text: `Cmd+Option+P` / `Ctrl+Alt+P`
+- Screenshot: `Cmd+Option+S` / `Ctrl+Alt+S`
+- Permissions: System Settings → Accessibility
+
+### For Troubleshooting
+- Check console logs
+- Verify permissions
+- Rebuild app after code changes
+- Clear app data cache

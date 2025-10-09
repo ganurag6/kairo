@@ -500,8 +500,8 @@ app.whenReady().then(() => {
   
   // Make sure window is created before registering shortcuts
   setTimeout(() => {
-    const ret = globalShortcut.register('CommandOrControl+K', () => {
-      console.log('Cmd/Ctrl+K pressed!');
+    const ret = globalShortcut.register('CommandOrControl+Option+P', () => {
+      console.log('Cmd/Ctrl+Option+P pressed!');
       // Store mouse position when shortcut is pressed
       const { screen } = require('electron');
       storedMousePosition = screen.getCursorScreenPoint();
@@ -512,12 +512,12 @@ app.whenReady().then(() => {
     if (!ret) {
       console.log('Registration failed - shortcut might be taken by another app');
     } else {
-      console.log('Shortcut registered successfully: Cmd/Ctrl+K');
+      console.log('Shortcut registered successfully: Cmd/Ctrl+Option+P');
     }
     
     // Register screenshot capture shortcut
-    const screenshotRet = globalShortcut.register('CommandOrControl+Shift+K', () => {
-      console.log('Cmd/Ctrl+Shift+K pressed - Starting screenshot capture!');
+    const screenshotRet = globalShortcut.register('CommandOrControl+Option+S', () => {
+      console.log('Cmd/Ctrl+Option+S pressed - Starting screenshot capture!');
       // Store mouse position when shortcut is pressed
       const { screen } = require('electron');
       storedMousePosition = screen.getCursorScreenPoint();
@@ -526,7 +526,7 @@ app.whenReady().then(() => {
     });
     
     if (screenshotRet) {
-      console.log('Screenshot capture shortcut registered: Cmd/Ctrl+Shift+K');
+      console.log('Screenshot capture shortcut registered: Cmd/Ctrl+Option+S');
     }
   }, 1000);
 });

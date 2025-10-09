@@ -821,9 +821,9 @@ class KairoApp {
       this.selectedTextDisplay.value = '';
     }
     
-    // Show smart suggestions section but hide AI suggestions
+    // Hide smart suggestions section when chat is cleared
     if (this.smartSuggestions) {
-      this.smartSuggestions.style.display = 'flex';
+      this.smartSuggestions.style.display = 'none';
     }
     
     // Hide AI Actions section when no text
