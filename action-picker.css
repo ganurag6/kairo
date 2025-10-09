@@ -22,8 +22,6 @@ body {
   border-radius: 12px;
   width: 520px;
   max-width: 100%;
-  -webkit-app-region: drag; /* Make window draggable */
-  cursor: move;
 }
 
 .actions-grid {
@@ -73,6 +71,101 @@ body {
 .action-btn.custom:hover {
   background: #374151;
   border-color: #4b5563;
+}
+
+/* Custom Input View Styles */
+.custom-input-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 20px 8px 20px;
+  height: 120px;
+  justify-content: flex-start;
+  align-items: stretch;
+  pointer-events: auto;
+}
+
+.custom-input {
+  width: 100%;
+  padding: 10px 16px;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: white;
+  outline: none;
+  transition: all 0.2s ease;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.custom-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+  font-style: italic;
+}
+
+.custom-input:focus {
+  border-color: #60a5fa;
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+
+.custom-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.custom-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 6px;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  outline: none;
+  position: relative;
+  z-index: 10;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+  user-select: none;
+}
+
+.cancel-btn {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  border: 2px solid rgba(255, 255, 255, 0.3) !important;
+  height: 32px;
+  flex: 0 0 80px;
+  padding: 4px 12px;
+}
+
+.cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+  color: white !important;
+  border-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.submit-btn {
+  background: #3b82f6 !important;
+  color: white !important;
+  border: 2px solid #3b82f6 !important;
+  height: 32px;
+  flex: 0 0 100px;
+  padding: 4px 12px;
+}
+
+.submit-btn:hover {
+  background: #2563eb !important;
+  transform: translateY(-1px);
+  border-color: #2563eb !important;
+}
+
+.custom-btn:active {
+  transform: scale(0.98);
 }
 
 /* Animation */

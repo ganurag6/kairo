@@ -61,10 +61,15 @@ class KairoApp {
     
     // Selected text elements (removed - now goes directly to chat)
     
-    // Smart suggestions
+    // Smart suggestions (hide them since they should only appear in action picker)
     this.smartSuggestions = document.getElementById('smart-suggestions');
     this.defaultSuggestionsContainer = document.getElementById('default-suggestions');
     this.aiSuggestionsContainer = document.getElementById('ai-suggestions');
+    
+    // Hide suggestion containers completely in chatbot window
+    if (this.smartSuggestions) this.smartSuggestions.style.display = 'none';
+    if (this.defaultSuggestionsContainer) this.defaultSuggestionsContainer.style.display = 'none';
+    if (this.aiSuggestionsContainer) this.aiSuggestionsContainer.style.display = 'none';
     
     // Chat elements
     this.chatMessages = document.getElementById('chat-messages');
@@ -205,17 +210,17 @@ class KairoApp {
   
   handleCapturedText(text) {
     console.log('📝 New text captured:', text);
+    console.log('📝 Previous text was:', this.currentText);
     
+    // Reset everything for new text
     this.currentText = text;
+    this.currentScreenshot = null; // Clear any previous screenshot
     this.conversation = []; // Reset conversation for new text
     
     // Clear chat and start new conversation
     this.clearChatMessages();
     
-    // Text captured, ready for action selection
-    
-    // Generate smart suggestions (user will select action)
-    this.generateSmartSuggestions(text);
+    // Don't generate suggestions here - they should only appear in action picker
     
     // Enable chat input for follow-up
     this.chatInput.disabled = false;
@@ -241,8 +246,8 @@ class KairoApp {
       // Clear chat and start new conversation
       this.clearChatMessages();
       
-      // Show system message with screenshot (no analysis yet)
-      this.addScreenshotMessage(data.image.base64, `Screenshot ready for: ${data.action}`);
+      // Show plain screenshot (no analysis text)
+      this.addScreenshotMessage(data.image.base64);
       
       // Auto-trigger the selected action
       setTimeout(() => {
@@ -264,12 +269,10 @@ class KairoApp {
       // Clear chat and start new conversation
       this.clearChatMessages();
       
-      // Show system message with screenshot
-      this.addScreenshotMessage(data.base64Image, data.analysisResult);
+      // Show plain screenshot
+      this.addScreenshotMessage(data.base64Image);
       
-      console.log('📸 About to generate smart suggestions...');
-      // Generate smart suggestions (user will select action)
-      this.generateSmartSuggestions(data.analysisResult);
+      // Don't generate suggestions here - they should only appear in action picker
     }
     
     // Enable chat input for follow-up
@@ -285,9 +288,8 @@ class KairoApp {
     
     // Check if we have a screenshot or text
     if (this.currentScreenshot) {
-      // For screenshots, show the action selection message
-      const combinedMessage = `Screenshot - ${suggestion.text}`;
-      this.addMessage('user', combinedMessage);
+      // For screenshots, just show the action
+      this.addMessage('user', suggestion.text);
     } else {
       // For text, combine the captured text and action into single message with hyphen
       const combinedMessage = `${this.currentText} - ${suggestion.text}`;
@@ -614,8 +616,23 @@ class KairoApp {
     messageDiv.className = `message ${type}`;
     
     if (type === 'assistant') {
+      // Parse Markdown to HTML with fallback
+      let parsedContent = content;
+      try {
+        if (typeof marked !== 'undefined' && marked.parse) {
+          parsedContent = marked.parse(content);
+          console.log('✅ Markdown parsed successfully');
+        } else {
+          console.log('⚠️ Marked library not available, using plain text');
+          parsedContent = content.replace(/\n/g, '<br>');
+        }
+      } catch (error) {
+        console.error('❌ Markdown parsing error:', error);
+        parsedContent = content.replace(/\n/g, '<br>');
+      }
+      
       messageDiv.innerHTML = `
-        ${content}
+        <div class="markdown-content">${parsedContent}</div>
         <button class="message-copy-btn" data-copy-text="${content.replace(/"/g, '&quot;').replace(/'/g, '&#39;')}">📋</button>
       `;
       
@@ -648,8 +665,8 @@ class KairoApp {
     console.log(`✅ Message added to chat`);
   }
   
-  addScreenshotMessage(base64Image, analysisText) {
-    console.log('📸 Adding screenshot message to chat');
+  addScreenshotMessage(base64Image) {
+    console.log('📸 Adding plain screenshot to chat');
     
     if (!this.chatMessages) {
       console.error('❌ chatMessages element not found! Cannot add screenshot message.');
@@ -657,7 +674,7 @@ class KairoApp {
     }
     
     const messageDiv = document.createElement('div');
-    messageDiv.className = 'message user screenshot-message';
+    messageDiv.className = 'message screenshot-message';
     
     messageDiv.innerHTML = `
       <div class="screenshot-container">
@@ -665,17 +682,13 @@ class KairoApp {
              alt="Captured Screenshot" 
              class="screenshot-image"
              onclick="this.classList.toggle('enlarged')" />
-        <div class="screenshot-analysis">
-          <strong>📸 Screenshot Analysis:</strong>
-          <div class="analysis-text">${analysisText}</div>
-        </div>
       </div>
     `;
     
     this.chatMessages.appendChild(messageDiv);
     this.scrollToBottom();
     
-    console.log('✅ Screenshot message added to chat');
+    console.log('✅ Plain screenshot added to chat');
   }
   
   showTypingIndicator() {
@@ -789,6 +802,12 @@ class KairoApp {
   
   clearChatMessages() {
     this.chatMessages.innerHTML = '';
+    // Also clear any typing indicators or other UI elements
+    const typingIndicators = document.querySelectorAll('.typing-indicator');
+    typingIndicators.forEach(indicator => indicator.remove());
+    // Clear suggestions containers as well
+    this.defaultSuggestionsContainer.innerHTML = '';
+    this.aiSuggestionsContainer.innerHTML = '';
   }
   
   captureNewText() {

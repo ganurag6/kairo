@@ -8,7 +8,7 @@
 </head>
 <body>
   <div class="action-picker">
-    <div class="actions-grid">
+    <div class="actions-grid" id="actions-view">
       <!-- Quick Actions Row 1 -->
       <button class="action-btn" data-action="fix-grammar">Fix Grammar</button>
       <button class="action-btn" data-action="make-concise">Make Concise</button>
@@ -22,6 +22,21 @@
       <button class="action-btn" data-action="simplify">Simplify</button>
       <button class="action-btn" data-action="key-points">Key Points</button>
       <button class="action-btn custom" data-action="custom">Custom...</button>
+    </div>
+    
+    <!-- Custom Input View -->
+    <div class="custom-input-view" id="custom-view" style="display: none;">
+      <input 
+        type="text" 
+        id="custom-input" 
+        class="custom-input" 
+        placeholder="Type your custom request..."
+        autofocus
+      />
+      <div class="custom-buttons">
+        <button class="custom-btn cancel-btn" id="cancel-custom">Cancel</button>
+        <button class="custom-btn submit-btn" id="submit-custom">Submit →</button>
+      </div>
     </div>
   </div>
   

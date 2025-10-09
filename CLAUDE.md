@@ -1,7 +1,7 @@
 # Kairo App - Complete Technical Documentation
 
 ## App Summary
-Kairo is an advanced Electron-based AI assistant that provides global text capture and screenshot analysis. Users can select text anywhere on screen, press Cmd+Option+K/Ctrl+Alt+K, or capture screenshots with Cmd+Option+S/Ctrl+Alt+S, and get AI-powered analysis, suggestions, and improvements through OpenAI's GPT-4o-mini.
+Kairo is an advanced Electron-based AI assistant that provides global text capture and screenshot analysis. Users can select text anywhere on screen, press Cmd+Option+H/Ctrl+Alt+H, or capture screenshots with Cmd+Option+S/Ctrl+Alt+S, and get AI-powered analysis, suggestions, and improvements through OpenAI's GPT-4o-mini.
 
 ## 🏗️ Core Architecture
 
@@ -26,13 +26,13 @@ let screenshotCancelled = false;    // Screenshot cancellation flag
 ## ⌨️ Global Shortcuts (Updated)
 
 ### Current Shortcuts
-- **Text Selection**: `Cmd+Option+P` (macOS) / `Ctrl+Alt+P` (Windows/Linux)
+- **Text Selection**: `Cmd+Option+H` (macOS) / `Ctrl+Alt+H` (Windows/Linux)
 - **Screenshot Capture**: `Cmd+Option+S` (macOS) / `Ctrl+Alt+S` (Windows/Linux)
 
 ### Shortcut Registration Logic
 ```javascript
 // main.js:503-530
-const ret = globalShortcut.register('CommandOrControl+Option+P', () => {
+const ret = globalShortcut.register('CommandOrControl+Option+H', () => {
   const { screen } = require('electron');
   storedMousePosition = screen.getCursorScreenPoint(); // Store position immediately
   showActionPicker();
@@ -43,7 +43,7 @@ const ret = globalShortcut.register('CommandOrControl+Option+P', () => {
 
 ### 1. Text Selection Workflow
 ```
-User selects text → Presses Cmd+Option+P → stores mouse position → copies text to clipboard 
+User selects text → Presses Cmd+Option+H → stores mouse position → copies text to clipboard 
 → shows action picker at stored position → user selects action → opens main chat window 
 → sends text + action to renderer → processes with OpenAI API → displays response
 ```
@@ -350,7 +350,7 @@ function decryptApiKey() {
 
 ### Shortcut Updates (October 2024)
 - **Old**: `Cmd+K` → `Cmd+Option+K` (still conflicted with browser inspector)
-- **New**: `Cmd+Option+P` for text, `Cmd+Option+S` for screenshots
+- **New**: `Cmd+Option+H` for text, `Cmd+Option+S` for screenshots
 - **Reason**: Avoid ALL conflicts including browser inspector (Cmd+Option+K)
 
 ### Screenshot Workflow Unification
@@ -427,7 +427,7 @@ sudo spctl --assess --verbose /Applications/Kairo.app
 - Text analysis: `textDetector.js`
 
 ### For Users
-- Text: `Cmd+Option+P` / `Ctrl+Alt+P`
+- Text: `Cmd+Option+H` / `Ctrl+Alt+H`
 - Screenshot: `Cmd+Option+S` / `Ctrl+Alt+S`
 - Permissions: System Settings → Accessibility
 

@@ -3,7 +3,8 @@
     "allow": [
       "Bash(base64:*)",
       "Bash(rm:*)",
-      "Bash(rg:*)"
+      "Bash(rg:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

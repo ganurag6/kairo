@@ -97,6 +97,8 @@ function createActionPickerWindow() {
     transparent: true,
     alwaysOnTop: true,
     skipTaskbar: true,
+    focusable: true,
+    visibleOnAllWorkspaces: true,  // Make it visible on all spaces to avoid space switching
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -107,11 +109,8 @@ function createActionPickerWindow() {
   actionPickerWindow.loadFile('action-picker.html');
   
   actionPickerWindow.on('blur', () => {
-    setTimeout(() => {
-      if (actionPickerWindow && !actionPickerWindow.isDestroyed()) {
-        actionPickerWindow.hide();
-      }
-    }, 200);
+    // Don't auto-hide on blur - let user click actions
+    // Window will hide when action is selected via IPC
   });
 }
 
@@ -167,42 +166,91 @@ function createOverlayWindow() {
 
 function showActionPicker() {
   console.log('🎯 Showing action picker');
+  console.log('🎯 Current overlay window visible?', overlayWindow?.isVisible());
+  console.log('🎯 Current selected text:', currentSelectedText);
+  
+  // Hide overlay window if it's visible to avoid confusion
+  if (overlayWindow && overlayWindow.isVisible()) {
+    console.log('🎯 Hiding overlay window first');
+    overlayWindow.hide();
+  }
   
   // First copy selected text to clipboard
   const { exec } = require('child_process');
   
   if (process.platform === 'darwin') {
+    // Store the current clipboard content to compare later
+    const previousClipboard = clipboard.readText();
+    console.log('📋 Previous clipboard:', previousClipboard.substring(0, 50));
+    
     // Copy selected text on macOS
     exec('osascript -e \'tell application "System Events" to keystroke "c" using command down\'', (error) => {
       if (error) {
         console.error('Copy failed:', error);
       }
       
+      // Increased delay to ensure clipboard is updated
       setTimeout(() => {
         currentSelectedText = clipboard.readText();
         
         // Log what we actually captured
         console.log('📋 Raw clipboard text:', currentSelectedText);
+        console.log('📋 Clipboard text length:', currentSelectedText.length);
+        console.log('📋 Clipboard changed?', currentSelectedText !== previousClipboard);
+        
+        // If clipboard didn't change and it's not empty, try one more time
+        if (currentSelectedText === previousClipboard && currentSelectedText.trim() !== '') {
+          console.log('📋 Clipboard unchanged, trying copy again...');
+          exec('osascript -e \'tell application "System Events" to keystroke "c" using command down\'', (error) => {
+            setTimeout(() => {
+              currentSelectedText = clipboard.readText();
+              console.log('📋 After retry - text:', currentSelectedText.substring(0, 50));
+              console.log('📋 After retry - changed?', currentSelectedText !== previousClipboard);
+              
+              // If still unchanged after 2 attempts, show chatbot instead
+              if (currentSelectedText === previousClipboard) {
+                console.log('📋 Clipboard still unchanged after 2 attempts - showing Kairo chatbot');
+                showKairoChatbot();
+                return;
+              }
+              
+              currentSelectedText = preserveListFormatting(currentSelectedText);
+              
+              if (!currentSelectedText || currentSelectedText.trim() === '') {
+                console.log('📋 Still no text after retry - showing Kairo chatbot');
+                showKairoChatbot();
+                return;
+              }
+              
+              console.log('📋 Text found after retry, showing action picker');
+              showActionPickerAtMousePosition();
+            }, 200);
+          });
+          return;
+        }
         
         // Try to detect and fix common list formatting issues
         currentSelectedText = preserveListFormatting(currentSelectedText);
         
         if (!currentSelectedText || currentSelectedText.trim() === '') {
-          console.log('No text selected');
-          showOverlay();
+          console.log('📋 No text selected or clipboard empty - showing Kairo chatbot');
+          console.log('📋 Clipboard content was:', JSON.stringify(currentSelectedText));
+          console.log('📋 Previous was:', JSON.stringify(previousClipboard));
+          showKairoChatbot();
           return;
         }
         
+        console.log('📋 Text found, showing action picker for:', currentSelectedText.substring(0, 50));
         showActionPickerAtMousePosition();
-      }, 100);
+      }, 200); // Increased from 100ms to 200ms
     });
   } else {
     // For Windows/Linux, try to get clipboard directly
     currentSelectedText = clipboard.readText();
     
     if (!currentSelectedText || currentSelectedText.trim() === '') {
-      console.log('No text selected');
-      showOverlay();
+      console.log('No text selected - showing Kairo chatbot');
+      showKairoChatbot();
       return;
     }
     
@@ -210,13 +258,39 @@ function showActionPicker() {
   }
 }
 
+function showKairoChatbot() {
+  console.log('💬 Showing Kairo chatbot (no text selected)');
+  
+  // Hide action picker if visible
+  if (actionPickerWindow && actionPickerWindow.isVisible()) {
+    actionPickerWindow.hide();
+  }
+  
+  // Create overlay window if needed
+  if (!overlayWindow) {
+    createOverlayWindow();
+  }
+  
+  // Show and focus the chat window
+  overlayWindow.center();
+  overlayWindow.show();
+  overlayWindow.focus();
+}
+
 function showActionPickerAtMousePosition() {
+  console.log('🎯 showActionPickerAtMousePosition called');
+  console.log('  - actionPickerWindow exists?', !!actionPickerWindow);
+  console.log('  - actionPickerWindow destroyed?', actionPickerWindow?.isDestroyed());
+  
   const { screen, BrowserWindow } = require('electron');
   
   // Use stored mouse position if available, otherwise get current position
   const mousePos = storedMousePosition || screen.getCursorScreenPoint();
-  console.log('Using mouse position:', mousePos);
-  console.log('Was stored:', !!storedMousePosition);
+  console.log('📍 Action Picker Positioning:');
+  console.log('  - Stored position:', storedMousePosition);
+  console.log('  - Current position:', screen.getCursorScreenPoint());
+  console.log('  - Using position:', mousePos);
+  console.log('  - Was stored:', !!storedMousePosition);
   
   // Get the display where the mouse is
   const activeDisplay = screen.getDisplayNearestPoint(mousePos);
@@ -246,20 +320,46 @@ function showActionPickerAtMousePosition() {
     y = displayBounds.y + displayBounds.height - windowHeight;
   }
   
-  if (actionPickerWindow) {
-    actionPickerWindow.setPosition(x, y);
-    actionPickerWindow.show();
-    actionPickerWindow.focus();
-    
-    // Tell action picker if we're dealing with a screenshot
-    setTimeout(() => {
-      const isScreenshot = !!currentScreenshot;
-      actionPickerWindow.webContents.send('content-type', { isScreenshot });
-    }, 100);
-    
-    // Clear stored mouse position after use
-    storedMousePosition = null;
+  if (!actionPickerWindow || actionPickerWindow.isDestroyed()) {
+    console.log('⚠️ Action picker window not found or destroyed, creating new one');
+    createActionPickerWindow();
+    // Wait for window to be ready
+    setTimeout(() => showActionPickerAtMousePosition(), 100);
+    return;
   }
+  
+  console.log(`📐 Setting action picker position to (${x}, ${y})`);
+  
+  // Simple approach - just position and show
+  console.log('📐 About to show action picker window');
+  console.log('  - Is visible before show?', actionPickerWindow.isVisible());
+  
+  actionPickerWindow.setBounds({ x, y, width: 540, height: 120 });
+  actionPickerWindow.show();
+  actionPickerWindow.focus();
+  
+  console.log('  - Is visible after show?', actionPickerWindow.isVisible());
+  console.log('  - Is focused?', actionPickerWindow.isFocused());
+  
+  // Ensure it stays on top and focused
+  actionPickerWindow.setAlwaysOnTop(true, 'screen-saver');
+  
+  // Double-ensure focus after a short delay
+  setTimeout(() => {
+    if (actionPickerWindow && !actionPickerWindow.isDestroyed()) {
+      actionPickerWindow.focus();
+      console.log('  - Is visible after delay?', actionPickerWindow.isVisible());
+      console.log('  - Is focused after delay?', actionPickerWindow.isFocused());
+    }
+  }, 100);
+  
+  // Tell action picker if we're dealing with a screenshot
+  setTimeout(() => {
+    const isScreenshot = !!currentScreenshot;
+    actionPickerWindow.webContents.send('content-type', { isScreenshot });
+  }, 100);
+  
+  // Don't clear stored mouse position here - let it be updated on next shortcut press
 }
 
 async function showOverlay() {
@@ -500,19 +600,20 @@ app.whenReady().then(() => {
   
   // Make sure window is created before registering shortcuts
   setTimeout(() => {
-    const ret = globalShortcut.register('CommandOrControl+Option+P', () => {
-      console.log('Cmd/Ctrl+Option+P pressed!');
+    const ret = globalShortcut.register('CommandOrControl+Option+H', () => {
+      console.log('\n=== 🔥 CMD+OPT+H PRESSED ===');
       // Store mouse position when shortcut is pressed
       const { screen } = require('electron');
       storedMousePosition = screen.getCursorScreenPoint();
       console.log('Stored mouse position:', storedMousePosition);
+      console.log('About to call showActionPicker()...');
       showActionPicker();
     });
     
     if (!ret) {
       console.log('Registration failed - shortcut might be taken by another app');
     } else {
-      console.log('Shortcut registered successfully: Cmd/Ctrl+Option+P');
+      console.log('Shortcut registered successfully: Cmd/Ctrl+Option+H');
     }
     
     // Register screenshot capture shortcut
@@ -611,7 +712,7 @@ ipcMain.handle('action-selected', async (event, { action, prompt }) => {
       // After a brief delay, send the action as a suggestion click
       setTimeout(() => {
         overlayWindow.webContents.send('suggestion-clicked', {
-          text: action,
+          text: action === 'custom' ? prompt : action,
           prompt: prompt
         });
       }, 200);
@@ -619,7 +720,7 @@ ipcMain.handle('action-selected', async (event, { action, prompt }) => {
       // Handle screenshot
       overlayWindow.webContents.send('captured-screenshot', {
         image: currentScreenshot,
-        action: action,
+        action: action === 'custom' ? prompt : action,
         prompt: prompt
       });
     }
