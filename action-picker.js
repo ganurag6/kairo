@@ -175,6 +175,23 @@ actionButtons.forEach(button => {
 
 // Listen for escape key to close
 document.addEventListener('keydown', (e) => {
+  // Prevent common browser shortcuts
+  if (e.key === '/' || e.key === '?') {
+    if (document.activeElement !== customInput) {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+  }
+  
+  // Prevent DevTools shortcuts
+  if (e.key === 'F12' || 
+      ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C'))) {
+    e.preventDefault();
+    e.stopPropagation();
+    return false;
+  }
+  
   if (e.key === 'Escape') {
     // If in custom view, go back to actions
     if (customView.style.display !== 'none') {

@@ -189,6 +189,24 @@ class KairoApp {
   
   setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
+      // Prevent common browser shortcuts that might trigger DevTools
+      if (e.key === '/' || e.key === '?') {
+        // Only prevent if not focused on input
+        if (document.activeElement !== this.chatInput) {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }
+      }
+      
+      // Prevent F12 and other DevTools shortcuts
+      if (e.key === 'F12' || 
+          ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C'))) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+      
       // Escape to close
       if (e.key === 'Escape') {
         this.closeWindow();
@@ -472,8 +490,11 @@ class KairoApp {
     console.log('📝 Current text:', this.currentText);
     console.log('📝 Current text length:', this.currentText ? this.currentText.length : 0);
     
-    if (!this.currentText || !this.currentText.trim()) {
-      console.error('❌ No text to analyze!');
+    // Only require currentText if this is an action-based prompt (not a regular chat message)
+    const isActionPrompt = ['fix-grammar', 'make-concise', 'professional', 'summarize', 'explain', 'translate', 'expand', 'simplify', 'key-points'].includes(prompt);
+    
+    if (isActionPrompt && (!this.currentText || !this.currentText.trim())) {
+      console.error('❌ No text to analyze for action prompt!');
       this.addMessage('assistant', 'Please add some text to analyze first.');
       return;
     }
@@ -555,16 +576,22 @@ class KairoApp {
   buildConversationHistory(currentPrompt) {
     const messages = [];
     
-    // Build system message based on whether we have a screenshot or text
+    // Build system message based on whether we have a screenshot, text, or regular chat
     if (this.currentScreenshot) {
       messages.push({
         role: 'system',
         content: 'You are Kairo, an intelligent AI assistant that acts at the perfect moment. You help users analyze, improve, and understand content from screenshots. Always provide helpful, accurate, and concise responses. The user has provided a screenshot for you to analyze.'
       });
-    } else {
+    } else if (this.currentText && this.currentText.trim()) {
       messages.push({
         role: 'system',
         content: `You are Kairo, an intelligent AI assistant that acts at the perfect moment. You help users analyze, improve, and understand text. Always provide helpful, accurate, and concise responses. The user has selected this text to analyze: "${this.currentText}"`
+      });
+    } else {
+      // Regular chat mode - no specific text to analyze
+      messages.push({
+        role: 'system',
+        content: 'You are Kairo, an intelligent AI assistant that acts at the perfect moment. You help users with their questions and tasks. Always provide helpful, accurate, and concise responses.'
       });
     }
     

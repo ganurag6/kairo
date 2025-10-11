@@ -82,9 +82,6 @@ function createTray() {
       }
     }
   ]);
-  
-  tray.setToolTip('Kairo - Smarter tasks, simpler life');
-  tray.setContextMenu(contextMenu);
 }
 
 function createActionPickerWindow() {
@@ -99,6 +96,11 @@ function createActionPickerWindow() {
     skipTaskbar: true,
     focusable: true,
     visibleOnAllWorkspaces: true,  // Make it visible on all spaces to avoid space switching
+    fullscreenable: false,
+    minimizable: false,
+    maximizable: false,
+    hasShadow: true,
+    roundedCorners: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -108,10 +110,45 @@ function createActionPickerWindow() {
 
   actionPickerWindow.loadFile('action-picker.html');
   
+  let justShown = false;
+  
   actionPickerWindow.on('blur', () => {
-    // Don't auto-hide on blur - let user click actions
-    // Window will hide when action is selected via IPC
+    // Prevent immediate blur when window is just shown
+    if (justShown) {
+      console.log('Ignoring blur - window just shown');
+      return;
+    }
+    
+    // Small delay to ensure we're not in a focus transition
+    setTimeout(() => {
+      if (!actionPickerWindow.isFocused()) {
+        console.log('Action picker lost focus - hiding window');
+        actionPickerWindow.hide();
+        // Don't clear the data immediately - an action might be processing
+        // Clear after a delay to ensure action handlers have time to read the data
+        setTimeout(() => {
+          // Only clear if the window is still hidden (no action was selected)
+          if (!actionPickerWindow.isVisible() && !overlayWindow.isVisible()) {
+            console.log('Clearing stored data after blur timeout');
+            currentSelectedText = '';
+            currentScreenshot = null;
+          }
+        }, 1000);
+      }
+    }, 50); // Shorter delay for better responsiveness
   });
+  
+  // Store reference for the justShown flag
+  actionPickerWindow.setJustShown = (value) => {
+    justShown = value;
+    if (value) {
+      // Reset flag after a delay
+      setTimeout(() => {
+        justShown = false;
+        console.log('Blur protection disabled - window can now be closed by clicking outside');
+      }, 2000); // Give 2 seconds window before blur handling kicks in
+    }
+  };
 }
 
 function createResponseWindow() {
@@ -158,7 +195,8 @@ function createOverlayWindow() {
   }
   
   overlayWindow.on('blur', () => {
-    if (overlayWindow && !overlayWindow.webContents.isDevToolsOpened()) {
+    // Simply hide on blur without checking DevTools
+    if (overlayWindow && !overlayWindow.isDestroyed()) {
       overlayWindow.hide();
     }
   });
@@ -260,6 +298,8 @@ function showActionPicker() {
 
 function showKairoChatbot() {
   console.log('💬 Showing Kairo chatbot (no text selected)');
+  console.log('  - overlayWindow exists?', !!overlayWindow);
+  console.log('  - overlayWindow destroyed?', overlayWindow?.isDestroyed());
   
   // Hide action picker if visible
   if (actionPickerWindow && actionPickerWindow.isVisible()) {
@@ -268,13 +308,17 @@ function showKairoChatbot() {
   
   // Create overlay window if needed
   if (!overlayWindow) {
+    console.log('  - Creating new overlay window');
     createOverlayWindow();
   }
   
   // Show and focus the chat window
+  console.log('  - Centering and showing window');
   overlayWindow.center();
   overlayWindow.show();
   overlayWindow.focus();
+  console.log('  - Window visible?', overlayWindow.isVisible());
+  console.log('  - Window focused?', overlayWindow.isFocused());
 }
 
 function showActionPickerAtMousePosition() {
@@ -299,9 +343,22 @@ function showActionPickerAtMousePosition() {
   const windowWidth = 540;
   const windowHeight = 120;
   
-  // Calculate position to center the window at mouse cursor
+  // For text selection, offset the window to appear below the cursor
+  // For screenshots, center it at the cursor
+  const isTextSelection = currentSelectedText && currentSelectedText.trim() !== '';
+  const verticalOffset = isTextSelection ? 20 : 0; // 20px below cursor for text
+  
+  // Calculate position
   let x = mousePos.x - Math.floor(windowWidth / 2);
-  let y = mousePos.y - Math.floor(windowHeight / 2);
+  let y = mousePos.y + verticalOffset; // Below cursor for text, at cursor for screenshots
+  
+  // If text selection, ensure we don't cover the text
+  if (isTextSelection) {
+    y = mousePos.y + 30; // More offset for text to ensure visibility
+  } else {
+    // For screenshots, center vertically
+    y = mousePos.y - Math.floor(windowHeight / 2);
+  }
   
   // Ensure the window stays within display bounds
   const displayBounds = activeDisplay.bounds;
@@ -330,19 +387,63 @@ function showActionPickerAtMousePosition() {
   
   console.log(`📐 Setting action picker position to (${x}, ${y})`);
   
-  // Simple approach - just position and show
-  console.log('📐 About to show action picker window');
-  console.log('  - Is visible before show?', actionPickerWindow.isVisible());
+  // Check if we're dealing with a browser
+  const { exec } = require('child_process');
   
-  actionPickerWindow.setBounds({ x, y, width: 540, height: 120 });
-  actionPickerWindow.show();
-  actionPickerWindow.focus();
+  // First, show the window immediately at the stored position
+  if (actionPickerWindow && !actionPickerWindow.isDestroyed()) {
+    console.log('🎯 Showing action picker immediately at position');
+    actionPickerWindow.setJustShown(true); // Set flag BEFORE showing
+    actionPickerWindow.setBounds({ x, y, width: 540, height: 120 });
+    actionPickerWindow.show();
+    actionPickerWindow.focus();
+    
+    // Force focus multiple times to ensure it sticks
+    setTimeout(() => {
+      actionPickerWindow.focus();
+      actionPickerWindow.moveTop();
+    }, 10);
+    
+    setTimeout(() => {
+      actionPickerWindow.focus();
+    }, 50);
+  }
   
-  console.log('  - Is visible after show?', actionPickerWindow.isVisible());
-  console.log('  - Is focused?', actionPickerWindow.isFocused());
-  
-  // Ensure it stays on top and focused
-  actionPickerWindow.setAlwaysOnTop(true, 'screen-saver');
+  // Then check for browser and adjust if needed
+  exec('osascript -e \'tell application "System Events" to get name of first application process whose frontmost is true\'', (error, stdout) => {
+    const frontApp = stdout ? stdout.trim() : '';
+    console.log('🌐 Frontmost app:', frontApp);
+    
+    const isBrowser = ['Safari', 'Firefox', 'Google Chrome', 'Arc', 'Brave Browser', 'Chrome'].some(browser => 
+      frontApp.toLowerCase().includes(browser.toLowerCase())
+    );
+    
+    // Microsoft Office apps also need special handling
+    const isOfficeApp = ['Microsoft Word', 'Microsoft Excel', 'Microsoft PowerPoint', 'Microsoft Outlook'].some(app =>
+      frontApp.includes(app)
+    );
+    
+    // Set appropriate window level based on app type
+    if (isBrowser || isOfficeApp) {
+      console.log('🌐 Browser/Office app detected, adjusting window level');
+      actionPickerWindow.setAlwaysOnTop(true, 'floating', 1);
+      actionPickerWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+      
+      // Force window to front for browsers and Office apps on macOS
+      if (process.platform === 'darwin') {
+        exec(`osascript -e 'tell application "Kairo" to activate'`, () => {
+          actionPickerWindow.focus();
+          actionPickerWindow.moveTop();
+        });
+      }
+    } else {
+      actionPickerWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+      actionPickerWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    }
+    
+    console.log('  - Is visible after show?', actionPickerWindow.isVisible());
+    console.log('  - Is focused?', actionPickerWindow.isFocused());
+  });
   
   // Double-ensure focus after a short delay
   setTimeout(() => {
@@ -355,9 +456,12 @@ function showActionPickerAtMousePosition() {
   
   // Tell action picker if we're dealing with a screenshot
   setTimeout(() => {
-    const isScreenshot = !!currentScreenshot;
-    actionPickerWindow.webContents.send('content-type', { isScreenshot });
-  }, 100);
+    if (actionPickerWindow && !actionPickerWindow.isDestroyed()) {
+      const isScreenshot = !!currentScreenshot;
+      console.log('📨 Sending content type to action picker:', isScreenshot ? 'screenshot' : 'text');
+      actionPickerWindow.webContents.send('content-type', { isScreenshot });
+    }
+  }, 200);
   
   // Don't clear stored mouse position here - let it be updated on next shortcut press
 }
@@ -589,7 +693,7 @@ app.whenReady().then(() => {
   if (process.platform === 'win32') {
     setTimeout(() => {
       overlayWindow.show();
-      overlayWindow.webContents.send('captured-text', 'Welcome to Kairo! Press Ctrl+K to capture text from anywhere. You can also click the system tray icon.');
+      overlayWindow.webContents.send('captured-text', 'Welcome to Kairo! Press Ctrl+Shift+. to capture text from anywhere. You can also click the system tray icon.');
       
       // Hide after 5 seconds
       setTimeout(() => {
@@ -600,8 +704,8 @@ app.whenReady().then(() => {
   
   // Make sure window is created before registering shortcuts
   setTimeout(() => {
-    const ret = globalShortcut.register('CommandOrControl+Option+H', () => {
-      console.log('\n=== 🔥 CMD+OPT+H PRESSED ===');
+    const ret = globalShortcut.register('CommandOrControl+Shift+.', () => {
+      console.log('\n=== 🔥 CMD+SHIFT+. PRESSED ===');
       // Store mouse position when shortcut is pressed
       const { screen } = require('electron');
       storedMousePosition = screen.getCursorScreenPoint();
@@ -613,7 +717,7 @@ app.whenReady().then(() => {
     if (!ret) {
       console.log('Registration failed - shortcut might be taken by another app');
     } else {
-      console.log('Shortcut registered successfully: Cmd/Ctrl+Option+H');
+      console.log('Shortcut registered successfully: Cmd/Ctrl+Shift+.');
     }
     
     // Register screenshot capture shortcut
@@ -687,7 +791,9 @@ ipcMain.handle('copy-to-clipboard', (event, text) => {
 
 // Action picker handlers
 ipcMain.handle('action-selected', async (event, { action, prompt }) => {
-  console.log('Action selected:', action);
+  console.log('🎬 Action selected:', action);
+  console.log('📝 Current selected text:', currentSelectedText?.substring(0, 100));
+  console.log('🖼️ Has screenshot:', !!currentScreenshot);
   
   // Hide action picker
   if (actionPickerWindow) {
@@ -696,6 +802,7 @@ ipcMain.handle('action-selected', async (event, { action, prompt }) => {
   
   // Show main overlay window instead of response window
   if (!overlayWindow) {
+    console.log('Creating overlay window...');
     createOverlayWindow();
   }
   
@@ -706,11 +813,13 @@ ipcMain.handle('action-selected', async (event, { action, prompt }) => {
   // Send the selected text or screenshot and action to the main chat window
   setTimeout(() => {
     if (currentSelectedText && currentSelectedText.trim() !== '') {
+      console.log('📤 Sending text to overlay:', currentSelectedText.substring(0, 50));
       // Handle text selection
       overlayWindow.webContents.send('captured-text', currentSelectedText);
       
       // After a brief delay, send the action as a suggestion click
       setTimeout(() => {
+        console.log('📤 Sending action to overlay:', action, 'with prompt:', prompt?.substring(0, 50));
         overlayWindow.webContents.send('suggestion-clicked', {
           text: action === 'custom' ? prompt : action,
           prompt: prompt
