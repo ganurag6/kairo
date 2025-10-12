@@ -315,7 +315,11 @@ class KairoApp {
     }
     
     // Process the action directly
-    this.processMessage(suggestion.prompt);
+    // For custom actions, the text IS the prompt
+    const promptToProcess = suggestion.text.startsWith('Translate') || 
+                           suggestion.text.length > 20 ? suggestion.text : (suggestion.prompt || suggestion.text);
+    console.log('📤 Processing prompt:', promptToProcess);
+    this.processMessage(promptToProcess);
     
     // Hide suggestions after selection
     this.hideSuggestions();
@@ -491,7 +495,10 @@ class KairoApp {
     console.log('📝 Current text length:', this.currentText ? this.currentText.length : 0);
     
     // Only require currentText if this is an action-based prompt (not a regular chat message)
-    const isActionPrompt = ['fix-grammar', 'make-concise', 'professional', 'summarize', 'explain', 'translate', 'expand', 'simplify', 'key-points'].includes(prompt);
+    const actionKeywords = ['fix-grammar', 'make-concise', 'professional', 'summarize', 'explain', 'translate', 'expand', 'simplify', 'key-points'];
+    const promptLower = prompt.toLowerCase();
+    const isActionPrompt = actionKeywords.some(keyword => promptLower.includes(keyword)) || 
+                          actionKeywords.includes(prompt);
     
     if (isActionPrompt && (!this.currentText || !this.currentText.trim())) {
       console.error('❌ No text to analyze for action prompt!');
@@ -569,6 +576,22 @@ class KairoApp {
   }
   
   buildContextualPrompt(userPrompt) {
+    // For custom prompts that are actual instructions, we may need to combine with text
+    const promptLower = userPrompt.toLowerCase();
+    
+    // If it's a custom instruction that needs the text, combine them
+    if (this.currentText && (
+        promptLower.includes('translate') ||
+        promptLower.includes('analyze') ||
+        promptLower.includes('improve') ||
+        promptLower.includes('rewrite') ||
+        promptLower.includes('convert') ||
+        promptLower.includes('explain')
+    )) {
+      // The text is already in the system message, so just return the prompt
+      return userPrompt;
+    }
+    
     // Send prompt directly - context is already in the system message
     return userPrompt;
   }

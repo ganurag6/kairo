@@ -1,75 +1,104 @@
-const { app, BrowserWindow, globalShortcut, clipboard, Tray, Menu, ipcMain, nativeImage } = require('electron');
+const { app, BrowserWindow, globalShortcut, clipboard, Tray, Menu, ipcMain, nativeImage, dialog } = require('electron');
 const path = require('path');
+
+// Initialize logger as early as possible (before app ready)
+const Logger = require('./logger');
+const logger = new Logger();
 
 let tray = null;
 let overlayWindow = null;
 let actionPickerWindow = null;
 let responseWindow = null;
+let logViewerWindow = null;
 let currentSelectedText = '';
 let currentScreenshot = null;
 let storedMousePosition = null;
 
 function createTray() {
   try {
-    // Create tray icon for Windows/Linux
-    if (process.platform !== 'darwin') {
-      // Use smaller icon for tray (Windows prefers 16x16 or 32x32)
-      const iconPath = path.join(__dirname, 'build', 'icon.png');
+    let iconPath;
+    let trayIcon;
+    
+    if (process.platform === 'darwin') {
+      // macOS menu bar icon
+      iconPath = path.join(__dirname, 'build', 'icon.png');
+      console.log('Creating macOS tray with icon:', iconPath);
+      
+      if (require('fs').existsSync(iconPath)) {
+        trayIcon = nativeImage.createFromPath(iconPath);
+        // For macOS menu bar, resize to 18x18 (will be 36x36 on Retina)
+        trayIcon = trayIcon.resize({ width: 18, height: 18 });
+        // Don't set as template for now - use the actual icon
+        // trayIcon.setTemplateImage(true);
+      } else {
+        console.log('Icon not found, creating text-based tray');
+        trayIcon = nativeImage.createEmpty();
+      }
+    } else {
+      // Windows/Linux
+      iconPath = path.join(__dirname, 'build', 'icon.png');
       console.log('Creating tray with icon:', iconPath);
       
-      // For Windows, we need to ensure icon exists and is the right size
-      const trayIcon = nativeImage.createFromPath(iconPath);
-      const resizedIcon = trayIcon.resize({ width: 32, height: 32 });
-      
-      tray = new Tray(resizedIcon);
-      console.log('Tray created successfully');
-      
-      const contextMenu = Menu.buildFromTemplate([
-        {
-          label: 'Show Kairo',
-          click: () => {
-            showOverlay();
-          }
-        },
-        {
-          label: 'Open with Ctrl+K',
-          enabled: false
-        },
-        {
-          type: 'separator'
-        },
-        {
-          label: 'Quit',
-          click: () => {
-            app.quit();
-          }
-        }
-      ]);
-      
-      tray.setToolTip('Kairo - Press Ctrl+K to capture text');
-      tray.setContextMenu(contextMenu);
-      
-      // Show window on tray click
-      tray.on('click', () => {
-        showOverlay();
-      });
+      trayIcon = nativeImage.createFromPath(iconPath);
+      trayIcon = trayIcon.resize({ width: 32, height: 32 });
     }
+    
+    tray = new Tray(trayIcon);
+    console.log('Tray created successfully');
   } catch (error) {
     console.error('Failed to create tray:', error);
+    // Try fallback approach
+    try {
+      console.log('Trying fallback tray creation...');
+      const fallbackIcon = nativeImage.createEmpty();
+      tray = new Tray(fallbackIcon);
+      tray.setTitle('K'); // Show "K" as text if icon fails
+    } catch (fallbackError) {
+      console.error('Fallback tray creation also failed:', fallbackError);
+    }
+  }
+  
+  // Only set context menu if tray was created
+  if (!tray) {
+    console.error('Cannot create context menu - tray is null');
+    return;
   }
   
   const contextMenu = Menu.buildFromTemplate([
     {
       label: 'Show Kairo',
       click: () => {
-        showOverlay();
+        showKairoChatbot();
+      },
+      accelerator: 'Command+Shift+K'
+    },
+    {
+      type: 'separator'
+    },
+    {
+      label: 'View Logs',
+      click: () => {
+        const logPath = logger.getLogPath();
+        console.log('Opening log file:', logPath);
+        require('electron').shell.showItemInFolder(logPath);
       }
     },
     {
-      label: 'Test Window',
+      label: 'Show Recent Logs',
       click: () => {
-        clipboard.writeText('This is a test message from Kairo!');
-        showOverlay();
+        const recentLogs = logger.getRecentLogs(50);
+        dialog.showMessageBox({
+          type: 'info',
+          title: 'Recent Kairo Logs',
+          message: 'Last 50 log entries',
+          detail: recentLogs,
+          buttons: ['OK', 'Open Log File'],
+          defaultId: 0
+        }).then(result => {
+          if (result.response === 1) {
+            require('electron').shell.openPath(logger.getLogPath());
+          }
+        });
       }
     },
     {
@@ -82,6 +111,17 @@ function createTray() {
       }
     }
   ]);
+  
+  tray.setToolTip('Kairo - Smarter tasks, simpler life');
+  tray.setContextMenu(contextMenu);
+  
+  // On macOS, clicking the tray icon shows the menu
+  // On Windows/Linux, it shows the app
+  if (process.platform !== 'darwin') {
+    tray.on('click', () => {
+      showKairoChatbot();
+    });
+  }
 }
 
 function createActionPickerWindow() {
@@ -169,6 +209,38 @@ function createResponseWindow() {
   });
 
   responseWindow.loadFile('response-window.html');
+}
+
+function createLogViewerWindow() {
+  logViewerWindow = new BrowserWindow({
+    width: 900,
+    height: 600,
+    minWidth: 600,
+    minHeight: 400,
+    show: false,
+    frame: true,
+    title: 'Kairo Debug Logs',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload-log-viewer.js')
+    }
+  });
+
+  logViewerWindow.loadFile('log-viewer.html');
+  
+  logViewerWindow.on('closed', () => {
+    logViewerWindow = null;
+  });
+}
+
+function showLogViewer() {
+  if (!logViewerWindow) {
+    createLogViewerWindow();
+  }
+  
+  logViewerWindow.show();
+  logViewerWindow.focus();
 }
 
 function createOverlayWindow() {
@@ -658,23 +730,16 @@ async function processClipboardImage() {
 app.whenReady().then(() => {
   console.log('App is ready!');
   
-  // Force the app to show in dock
+  // Set up as menu bar app on macOS
   if (process.platform === 'darwin') {
-    app.dock.show();
-    // Create a dock icon if needed
+    // Hide from dock - we're a menu bar app
+    app.dock.hide();
     app.setName('Kairo');
     
-    // Handle dock icon click
+    // If someone launches the app again, show the main window
     app.on('activate', () => {
-      console.log('Dock icon clicked');
-      if (overlayWindow) {
-        overlayWindow.show();
-        overlayWindow.focus();
-      } else {
-        createOverlayWindow();
-        overlayWindow.show();
-        overlayWindow.focus();
-      }
+      console.log('App activated');
+      showKairoChatbot();
     });
   }
   
@@ -733,6 +798,16 @@ app.whenReady().then(() => {
     if (screenshotRet) {
       console.log('Screenshot capture shortcut registered: Cmd/Ctrl+Option+S');
     }
+    
+    // Register log viewer shortcut (for debugging)
+    const logRet = globalShortcut.register('CommandOrControl+Option+L', () => {
+      console.log('Opening log viewer window');
+      showLogViewer();
+    });
+    
+    if (logRet) {
+      console.log('Log viewer shortcut registered: Cmd/Ctrl+Option+L');
+    }
   }, 1000);
 });
 
@@ -741,7 +816,18 @@ app.on('window-all-closed', (e) => {
 });
 
 app.on('will-quit', () => {
+  console.log('=== Kairo Shutting Down ===');
   globalShortcut.unregisterAll();
+});
+
+// Log uncaught errors
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  console.error('Stack:', error.stack);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
 ipcMain.handle('hide-window', () => {
@@ -776,6 +862,14 @@ ipcMain.handle('get-api-key', () => {
   const apiKey = decryptApiKey();
   console.log('API key requested, returning key starting with:', apiKey.substring(0, 10));
   return apiKey;
+});
+
+ipcMain.handle('get-log-path', () => {
+  return logger.getLogPath();
+});
+
+ipcMain.handle('get-recent-logs', (event, lines = 100) => {
+  return logger.getRecentLogs(lines);
 });
 
 ipcMain.handle('copy-to-clipboard', (event, text) => {
